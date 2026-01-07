@@ -1,0 +1,30 @@
+// app/andon-monitoring/page.tsx
+import Link from "next/link"
+import ModernSidebar from "@/components/ui/sidebar"
+import { workshops } from "@/lib/mock-data"
+import { Card, CardHeader, CardTitle } from "@/components/ui/card"
+
+export default function Home() {
+  return (
+    <ModernSidebar>
+      <div className="p-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">Andon Monitoring</h1>
+          <p className="text-gray-400">Pilih workshop untuk melihat detail monitoring produksi</p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {workshops.map((ws) => (
+            <Link key={ws.id} href={`/andon-monitoring/${ws.id}`}>
+              <Card className="cursor-pointer hover:shadow-lg transition-all hover:scale-105 bg-gray-800/50 backdrop-blur-sm border-gray-700/50 hover:border-blue-500/50">
+                <CardHeader>
+                  <CardTitle className="text-white">{ws.name}</CardTitle>
+                </CardHeader>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </ModernSidebar>
+  )
+}

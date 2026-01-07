@@ -1,0 +1,175 @@
+// app/andon-monitoring/[workshopId]/lantai/[floorId]/line/[lineId]/page.tsx
+
+import WorkstationCard from "@/components/andon/WorkstationCard";
+import { workshops } from '@/lib/mock-data';
+import ModernSidebar from "@/components/ui/sidebar"; // Sesuaikan path jika berbeda
+import { db } from '@/lib/db';
+import { sql } from 'drizzle-orm';
+
+interface PageProps {
+  params: {
+    workshopId: string;
+    floorId: string;
+    lineId: string;
+  };
+}
+
+// Sesuaikan dengan struktur kolom di tabel `production_progress`
+interface ProductionProgress {
+  id_process: number;
+  id_project: string | null;
+  id_product: string | null;
+  id_perproduct: string | null;
+  project_name: string | null;
+  product_name: string | null;
+  line: string;
+  workshop: string | null;
+  product_status: string | null;
+  drawing_link: string | null;
+  operator_assigned: string | null;
+  operator_nip: number | null;
+  process_name: string | null;
+  workstation: number | null;
+  operator_actual_nip: number | null;
+  operator_actual_name: string | null;
+  timestamps: Date | null;
+  finish_schedule: Date | null;
+}
+
+const formatDate = (date: Date | null): string => {
+  if (!date) return '—';
+  return date.toLocaleString('id-ID', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+export default async function LinePage({ params }: PageProps) {
+  const { workshopId, floorId, lineId } = await params;
+
+  const workshop = workshops.find(ws => ws.id === workshopId);
+  if (!workshop) {
+    return (
+      <ModernSidebar>
+        <div className="p-8 text-white">
+          <h1 className="text-3xl">Workshop Not Found</h1>
+        </div>
+      </ModernSidebar>
+    );
+  }
+
+  const floor = workshop.floors.find(f => f.id === floorId);
+  if (!floor) {
+    return (
+      <ModernSidebar>
+        <div className="p-8 text-white">
+          <h1 className="text-3xl">Floor Not Found</h1>
+        </div>
+      </ModernSidebar>
+    );
+  }
+
+  const line = floor.lines.find(l => l.id === lineId);
+  if (!line) {
+    return (
+      <ModernSidebar>
+        <div className="p-8 text-white">
+          <h1 className="text-3xl">Line Not Found</h1>
+        </div>
+      </ModernSidebar>
+    );
+  }
+
+  let productionData: ProductionProgress[] = [];
+  try {
+    // Convert lineid "1" menjadi "Lt 1 Line 1" atau sesuai format database
+    const lineValue = `Lt 1 Line ${lineId}`; // Sesuaikan dengan lantai dari params
+    
+    console.log("Looking for line:", lineValue); // Debug
+    
+    const result = await db.execute(sql`
+      SELECT * FROM production_progress
+      ORDER BY timestamps DESC
+    `);
+    
+    const rows = Array.isArray(result[0]) ? result[0] : result;
+    console.log("Rows found:", rows.length);
+    
+    productionData = rows as ProductionProgress[];
+  } catch (error) {
+    console.error("Gagal mengambil data production progress:", error);
+  }
+
+  return (
+    <ModernSidebar>
+      <div className="p-6 text-white">
+        <div className="flex items-center gap-2 mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold">
+            {workshop.name} – {floor.name} – {line.name}
+          </h1>
+        </div>
+
+        {/* Tabel Production Progress */}
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">Production Progress</h2>
+          <div className="border border-gray-700 rounded-md overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-800">
+                <tr>
+                  <th className="text-left p-3">Process ID</th>
+                  <th className="text-left p-3">Product</th>
+                  <th className="text-left p-3">Workstation</th>
+                  <th className="text-left p-3">Operator</th>
+                  <th className="text-left p-3">Status</th>
+                  <th className="text-left p-3">Last Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productionData.length > 0 ? (
+                  productionData.map((item) => (
+                    <tr key={item.id_process} className="border-t border-gray-800 hover:bg-gray-800/50">
+                      <td className="p-3">{item.id_process}</td>
+                      <td className="p-3">{item.product_name ?? '—'}</td>
+                      <td className="p-3">{item.workstation ?? '—'}</td>
+                      <td className="p-3">{(item.operator_actual_name || item.operator_assigned) ?? '—'}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          item.product_status === 'COMPLETED' ? 'bg-green-600 text-white' :
+                          item.product_status === 'IN_PROGRESS' ? 'bg-yellow-500 text-white' :
+                          'bg-gray-600 text-white'
+                        }`}>
+                          {item.product_status || '—'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-sm text-gray-300">{formatDate(item.timestamps)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="p-6 text-center text-gray-400">
+                      Tidak ada data produksi.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Workstation Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+          {line.workstations.map((ws) => (
+            <WorkstationCard
+              key={ws.id}
+              id={ws.id}
+              name={ws.name}
+            />
+          ))}
+        </div>
+      </div>
+    </ModernSidebar>
+  );
+}

@@ -1,0 +1,76 @@
+// app/andon-monitoring/[workshopId]/lantai/[floorId]/page.tsx
+
+import { FC } from 'react';
+import Link from 'next/link';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import ModernSidebar from '@/components/ui/sidebar';
+
+// Import data mock dari lib
+import { workshops } from '@/lib/mock-data';
+
+interface PageProps {
+params: {
+workshopId: string;
+floorId: string;
+};
+}
+
+export default async function FloorPage({ params }: PageProps) {
+// Gunakan await sesuai best practice Next.js 15+
+const { workshopId, floorId } = await params;
+
+// Cari workshop berdasarkan ID
+const workshop = workshops.find(ws => ws.id === workshopId);
+if (!workshop) {
+return (
+<ModernSidebar>
+    <main className="p-8">
+        <h1 className="text-3xl font-bold mb-6">Workshop Not Found</h1>
+    </main>
+</ModernSidebar>
+);
+}
+
+// Cari lantai berdasarkan ID
+const floor = workshop.floors.find(f => f.id === floorId);
+if (!floor) {
+return (
+<ModernSidebar>
+    <main className="p-8">
+        <h1 className="text-3xl font-bold text-white mb-2">Floor Not Found</h1>
+    </main>
+</ModernSidebar>
+
+);
+}
+
+// Ambil daftar line dari lantai
+const lines = floor.lines;
+
+return (
+<ModernSidebar>
+    <main className="p-8">
+        <div className="mb-8">
+            <h1 className="text-3xl font-bold text-white mb-2">
+                {workshop.name} - {floor.name}
+            </h1>
+            <p className="text-gray-400">Pilih line untuk melihat detail monitoring produksi</p>
+        </div>
+
+        {/* Grid untuk menampilkan card line */}
+        <div className="grid grid-cols-3 gap-6">
+            {lines.map((line) => (
+            <Link key={line.id} href={`/andon-monitoring/${workshopId}/lantai/${floorId}/line/${line.id}`}>
+            <Card className="cursor-pointer hover:shadow-lg">
+                <CardHeader>
+                    <CardTitle>{line.name}</CardTitle>
+                </CardHeader>
+            </Card>
+            </Link>
+            ))}
+        </div>
+    </main>
+</ModernSidebar>
+
+);
+}
