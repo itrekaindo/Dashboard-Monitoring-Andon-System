@@ -11,9 +11,11 @@ interface PageProps {
   };
 }
 
-const formatDate = (date: Date | null): string => {
+const formatDate = (date: Date | string | null): string => {
   if (!date) return '—';
-  return date.toLocaleString('id-ID', {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (!(d instanceof Date) || isNaN(d.getTime())) return '—';
+  return d.toLocaleString('id-ID', {
     weekday: 'long',
     day: '2-digit',
     month: 'long',

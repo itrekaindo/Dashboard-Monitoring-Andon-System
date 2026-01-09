@@ -8,6 +8,8 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   port: parseInt(process.env.DB_PORT || '3306'),
+  // Avoid invalid Date parsing (e.g., 0000-00-00 00:00:00) by returning strings
+  dateStrings: true,
 });
 
 export const db = drizzle(pool);
