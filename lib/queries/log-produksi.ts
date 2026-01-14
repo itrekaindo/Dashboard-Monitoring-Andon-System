@@ -159,7 +159,6 @@ export async function getProductsByTrainset(): Promise<ProductByTrainset[]> {
   }
 }
 
-/*
 export async function getProductProcessTimeline(): Promise<ProductProcessTimeline[]> {
   try {
     const result = await db.execute(sql`
@@ -190,7 +189,7 @@ export async function getProductProcessTimeline(): Promise<ProductProcessTimelin
     return [];
   }
 }
-*/
+
 export async function getAverageProductDuration(): Promise<AverageProductDuration[]> {
   try {
     const result = await db.execute(sql`
