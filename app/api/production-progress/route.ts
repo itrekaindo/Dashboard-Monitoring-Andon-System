@@ -30,8 +30,6 @@ export async function GET(request: Request) {
     let list;
     if (search) {
       list = await searchProductionProgress(search);
-    } else if (workshop && line) {
-      list = await getProductionProgressByWorkshopAndLine(workshop, line);
     } else if (workshop) {
       list = await getProductionProgressByWorkshop(workshop);
     } else if (line) {

@@ -52,8 +52,8 @@ const MenuItemComponent = ({
   onNavigate,
   toggleSubmenu 
 }: MenuItemProps) => {
-  const isActive = activeMenu === item.id;
-  const isExpanded = expandedMenus.includes(item.id);
+  const isActive = activeMenu === item.id || activeMenu.startsWith(`${item.id}-`);
+  const isExpanded = expandedMenus.includes(item.id) || activeMenu.startsWith(`${item.id}-`);
   const hasSubmenu = item.submenu && item.submenu.length > 0;
 
   const handleClick = () => {
@@ -137,6 +137,8 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
     if (pathname.startsWith('/material')) return 'material';
     if (pathname.startsWith('/operator')) return 'operator';
     if (pathname.startsWith('/schedule')) return 'schedule';
+    if (pathname.startsWith('/production-progress')) return 'production-workstation';
+    if (pathname.startsWith('/production/logs')) return 'production-log';
     if (pathname.startsWith('/settings')) return 'settings';
     return 'dashboard';
   };
@@ -181,6 +183,23 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
       label: 'Schedule',
       icon: FileText,
       path: '/schedule'
+    },
+    {
+      id: 'production',
+      label: 'Production',
+      icon: Activity,
+      submenu: [
+        {
+          id: 'production-workstation',
+          label: 'Data PLC',
+          path: '/production-progress/timeline'
+        },
+        {
+          id: 'production-log',
+          label: 'Data Kanban',
+          path: '/production/logs'
+        }
+      ]
     }
   ];
 

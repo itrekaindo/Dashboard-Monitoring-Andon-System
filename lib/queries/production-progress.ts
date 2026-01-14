@@ -1,6 +1,16 @@
 import { db } from '@/lib/db';
 import { sql } from 'drizzle-orm';
 
+// Helper function to safely extract rows from db.execute result
+function extractRows(result: any): any[] {
+  if (!result) return [];
+  if (Array.isArray(result)) {
+    // Result is [rows, fields] from mysql2
+    return Array.isArray(result[0]) ? result[0] : [];
+  }
+  return Array.isArray(result) ? result : [];
+}
+
 export interface ProductionProgress {
   id_process: number;
   id_product: string | null;
@@ -17,6 +27,7 @@ export interface ProductionProgress {
   duration_sec_actual: number | null;
   duration_time_actual: string | null;
   status: string | null;
+  note_qc?: string | null;
   finish_actual: Date | string | null;
 }
 
@@ -47,7 +58,7 @@ export async function getAllProductionProgress(): Promise<ProductionProgress[]> 
       ORDER BY start_actual DESC
     `);
     
-    const rows = Array.isArray(result[0]) ? result[0] : result;
+    const rows = extractRows(result);
     return rows as ProductionProgress[];
   } catch (error) {
     console.error("Failed to fetch production progress:", error);
@@ -64,7 +75,7 @@ export async function getProductionProgressById(id: number): Promise<ProductionP
       LIMIT 1
     `);
     
-    const rows = Array.isArray(result[0]) ? result[0] : result;
+    const rows = extractRows(result);
     return rows.length > 0 ? (rows[0] as ProductionProgress) : null;
   } catch (error) {
     console.error("Failed to fetch production progress:", error);
@@ -81,7 +92,7 @@ export async function getProductionProgressByWorkshop(workshop: string): Promise
       ORDER BY start_actual DESC
     `);
     
-    const rows = Array.isArray(result[0]) ? result[0] : result;
+    const rows = extractRows(result);
     return rows as ProductionProgress[];
   } catch (error) {
     console.error("Failed to fetch production progress:", error);
@@ -98,7 +109,7 @@ export async function getProductionProgressByLine(line: string): Promise<Product
       ORDER BY start_actual DESC
     `);
     
-    const rows = Array.isArray(result[0]) ? result[0] : result;
+    const rows = extractRows(result);
     return rows as ProductionProgress[];
   } catch (error) {
     console.error("Failed to fetch production progress:", error);
@@ -115,7 +126,7 @@ export async function getProductionProgressByWorkstation(workstation: number): P
       ORDER BY start_actual DESC
     `);
     
-    const rows = Array.isArray(result[0]) ? result[0] : result;
+    const rows = extractRows(result);
     return rows as ProductionProgress[];
   } catch (error) {
     console.error("Failed to fetch production progress:", error);
@@ -260,6 +271,16 @@ export async function getProductionStats(): Promise<ProductionStats> {
     `);
     
     const rows = Array.isArray(result[0]) ? result[0] : result;
+    if (!rows || rows.length === 0) {
+      return {
+        total_processes: 0,
+        completed: 0,
+        in_progress: 0,
+        pending: 0,
+        avg_duration_sec: 0,
+        total_duration_sec: 0,
+      };
+    }
     return rows[0] as ProductionStats;
   } catch (error) {
     console.error("Failed to fetch production stats:", error);
@@ -352,7 +373,7 @@ export async function getWorkstationStats(): Promise<WorkstationStats[]> {
       ORDER BY workstation ASC
     `);
     
-    const rows = Array.isArray(result[0]) ? result[0] : result;
+    const rows = extractRows(result);
     return rows as WorkstationStats[];
   } catch (error) {
     console.error("Failed to fetch workstation stats:", error);
@@ -396,7 +417,7 @@ ORDER BY start_actual DESC
       LIMIT ${limit}
     `);
     
-    const rows = Array.isArray(result[0]) ? result[0] : result;
+    const rows = extractRows(result);
     return rows as ProductionProgress[];
   } catch (error) {
     console.error("Failed to fetch production progress:", error);
@@ -404,29 +425,176 @@ ORDER BY start_actual DESC
   }
 }
 
-export async function getRecentWS1(): Promise<ProductionProgress[]> {
+export interface CurrentWorkstationProgress {
+  current_id_product: string | null;
+  target_durasi: string | null;
+  presentase: number | null;
+  current_id_perproduct: string | null;
+  current_product_name: string | null;
+  current_workstation: number;
+  current_operator_actual_name: string | null;
+  current_start_actual: Date | string | null;
+  current_status: string | null;
+  urutan: number;
+}
+
+export interface WorkstationDuration {
+  workstation: number;
+  actual_duration: string | null;
+}
+
+export interface ProductionEstimate {
+  id_product: string;
+  product_name: string | null;
+  start_actual: Date | string | null;
+  total_duration: string | null;
+  estimated_finish: Date | string | null;
+}
+
+export interface ProductStatusCard {
+  id_product: string;
+  id_perproduct: string | null;
+  product_name: string | null;
+  operator_actual_name: string | null;
+  start_actual: Date | string | null;
+  finish_actual: Date | string | null;
+  total_duration: string | null;
+  estimated_finish: Date | string | null;
+  is_finish_good: number;
+  note_qc: string | null;
+  current_workstation: number | null;
+  is_completed: number;
+}
+
+// Get latest active process per workstation (finish_actual is null)
+export async function getRecentProgress(): Promise<CurrentWorkstationProgress[]> {
   try {
     const result = await db.execute(sql`
 WITH RankedData AS (
-    SELECT 
-        id_perproduct AS current_id_perproduct, 
-        product_name AS current_product_name, 
-        workstation AS current_workstation, 
-        operator_actual_name AS current_operator_actual_name, 
-        start_actual AS current_start_actual, 
-        status AS current_status,
-        ROW_NUMBER() OVER (PARTITION BY workstation ORDER BY start_actual DESC) as urutan
-    FROM production_progress
-    WHERE finish_actual IS NULL
+    SELECT
+        pp.id_product AS current_id_product,
+        t.duration_time AS target_durasi,
+        t.percentage AS presentase,
+        pp.id_perproduct AS current_id_perproduct,
+        pp.product_name AS current_product_name,
+        pp.workstation AS current_workstation,
+        pp.operator_actual_name AS current_operator_actual_name,
+        pp.start_actual AS current_start_actual,
+        pp.status AS current_status,
+        ROW_NUMBER() OVER (PARTITION BY pp.workstation ORDER BY pp.start_actual DESC) as urutan
+    FROM production_progress AS pp
+    LEFT JOIN ideal_time AS t 
+        ON pp.id_product = t.id_product 
+        AND pp.workstation = t.workstation
+    WHERE DATE(pp.start_actual) = CURDATE()
 )
 SELECT * FROM RankedData 
 WHERE urutan = 1;
     `);
     
-    const rows = Array.isArray(result[0]) ? result[0] : result;
-    return rows as ProductionProgress[];
+    const rows = extractRows(result);
+    return rows as CurrentWorkstationProgress[];
   } catch (error) {
     console.error("Failed to fetch production progress:", error);
+    return [];
+  }
+}
+
+// Get actual duration for each workstation (today)
+export async function getWorkstationDurations(): Promise<WorkstationDuration[]> {
+  try {
+    const result = await db.execute(sql`
+      SELECT 
+        workstation,
+        duration_time_actual as actual_duration
+      FROM production_progress
+      WHERE DATE(start_actual) = CURDATE()
+      ORDER BY workstation ASC, start_actual DESC
+    `);
+    
+    const rows = extractRows(result);
+    return rows as WorkstationDuration[];
+  } catch (error) {
+    console.error("Failed to fetch workstation durations:", error);
+    return [];
+  }
+}
+
+// Get production estimate based on WS1 start time and total_production_qc duration
+export async function getProductionEstimate(): Promise<ProductionEstimate | null> {
+  try {
+    const result = await db.execute(sql`
+      SELECT 
+        pp.id_product,
+        pp.product_name,
+        pp.start_actual,
+        it.duration_time as total_duration,
+        DATE_ADD(pp.start_actual, INTERVAL TIME_TO_SEC(it.duration_time) SECOND) as estimated_finish
+      FROM production_progress pp
+      INNER JOIN ideal_time it 
+        ON pp.id_product = it.id_product 
+        AND it.process_name = 'total_production_qc'
+      WHERE pp.workstation = 1 
+        AND DATE(pp.start_actual) = CURDATE()
+        AND pp.finish_actual IS NULL
+      ORDER BY pp.start_actual DESC
+      LIMIT 1
+    `);
+    
+    const rows = extractRows(result);
+    return rows.length > 0 ? (rows[0] as ProductionEstimate) : null;
+  } catch (error) {
+    console.error("Failed to fetch production estimate:", error);
+    return null;
+  }
+}
+
+// Get product status cards for specified date range (default: last 7 days)
+export async function getProductStatusCards(daysBack: number = 7): Promise<ProductStatusCard[]> {
+  try {
+    const result = await db.execute(sql`
+WITH ws1_start AS (
+  SELECT
+    id_perproduct,
+    MIN(start_actual) as ws1_start_actual
+  FROM production_progress
+  WHERE workstation = 1
+    AND DATE(start_actual) >= DATE_SUB(CURDATE(), INTERVAL ${daysBack} DAY)
+  GROUP BY id_perproduct
+),
+latest AS (
+  SELECT
+    pp.*,
+    ROW_NUMBER() OVER (PARTITION BY pp.id_perproduct ORDER BY pp.start_actual DESC) AS rn
+  FROM production_progress pp
+  WHERE DATE(pp.start_actual) >= DATE_SUB(CURDATE(), INTERVAL ${daysBack} DAY)
+)
+SELECT
+  l.id_product,
+  l.id_perproduct,
+  l.product_name,
+  l.operator_actual_name,
+  ws1.ws1_start_actual as start_actual,
+  l.finish_actual,
+  l.note_qc,
+  l.workstation as current_workstation,
+  it.duration_time AS total_duration,
+  DATE_ADD(ws1.ws1_start_actual, INTERVAL TIME_TO_SEC(it.duration_time) SECOND) AS estimated_finish,
+  CASE WHEN l.note_qc = 'Finish Good' THEN 1 ELSE 0 END AS is_finish_good,
+  CASE WHEN l.finish_actual IS NOT NULL THEN 1 ELSE 0 END AS is_completed
+FROM latest l
+LEFT JOIN ws1_start ws1 ON l.id_perproduct = ws1.id_perproduct
+LEFT JOIN ideal_time it
+  ON l.id_product = it.id_product
+  AND it.process_name = 'total_production_qc'
+WHERE l.rn = 1
+ORDER BY l.start_actual DESC;
+    `);
+
+    const rows = extractRows(result);
+    return rows as ProductStatusCard[];
+  } catch (error) {
+    console.error("Failed to fetch product status cards:", error);
     return [];
   }
 }
