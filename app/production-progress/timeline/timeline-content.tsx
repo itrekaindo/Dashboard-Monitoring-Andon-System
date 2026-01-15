@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, MapPin, Users, ChevronRight, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Activity, MapPin, Users, ChevronRight, Clock, CheckCircle, XCircle, AlertCircle, PauseCircle } from "lucide-react";
 import Elapsed from "@/components/ui/elapsed";
-import type { ProductionStats, WorkstationStats, ProductionProgress, CurrentWorkstationProgress, WorkstationDuration, ProductionEstimate, ProductStatusCard } from "@/lib/queries/production-progress";
+import type { ProductionStats, WorkstationStats, ProductionProgress, CurrentWorkstationProgress, WorkstationDuration, ProductionEstimate, ProductStatusCard, ProductStatusSummary } from "@/lib/queries/production-progress";
 
 interface TimelineContentProps {
   initialStats: ProductionStats;
@@ -15,6 +15,7 @@ interface TimelineContentProps {
   initialDurations: WorkstationDuration[];
   initialEstimate: ProductionEstimate | null;
   initialCards: ProductStatusCard[];
+  initialStatusSummary?: ProductStatusSummary | null;
   forcedStep?: number;
 }
 
@@ -98,6 +99,7 @@ export default function TimelineContent({
   initialDurations,
   initialEstimate,
   initialCards,
+  initialStatusSummary,
   forcedStep,
 }: TimelineContentProps) {
   const [stats, setStats] = useState<ProductionStats>(initialStats);
@@ -107,6 +109,7 @@ export default function TimelineContent({
   const [durations, setDurations] = useState<WorkstationDuration[]>(initialDurations);
   const [estimate, setEstimate] = useState<ProductionEstimate | null>(initialEstimate);
   const [cards, setCards] = useState<ProductStatusCard[]>(initialCards);
+  const [statusSummary, setStatusSummary] = useState<ProductStatusSummary | null>(initialStatusSummary || null);
   const [isLoading, setIsLoading] = useState(false);
   const [daysBack, setDaysBack] = useState(7);
 
@@ -128,6 +131,7 @@ export default function TimelineContent({
       setDurations(data.durations);
       setEstimate(data.estimate);
       setCards(data.cards || []);
+      setStatusSummary(data.statusSummary || null);
     } catch (error) {
       console.error('Failed to refresh data:', error);
     } finally {
@@ -317,10 +321,10 @@ export default function TimelineContent({
           </CardContent>
         </Card>
 
-        {/* Product status cards */}
+        {/* Product status cards - Kanban Board */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <div className="text-white font-semibold text-lg">Current Product Status</div>
+            <div className="text-white font-semibold text-lg">Current Kanban Status</div>
             <div className="flex items-center gap-2">
               <label className="text-sm text-gray-300">Tampilkan data:</label>
               <select
@@ -342,98 +346,267 @@ export default function TimelineContent({
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {cards.map((card) => {
-              // Determine if product is still in progress (not completed all workstations)
-              const isOnProgress = card.is_completed === 0;
-              
-              const isGood = card.is_finish_good === 1;
-              const statusLabel = isGood ? "Finish Good" : "Not OK";
-              
-              // Status display logic:
-              // 1. If still on progress -> show "On Progress"
-              // 2. If completed and has note_qc -> show "Finish Good" or "Not OK"
-              // 3. If completed but no note_qc -> show "Belum QC"
-              const displayStatus = isOnProgress ? "On Progress" : (card.note_qc || "Belum QC");
-              const displayLabel = isOnProgress ? "" : (card.note_qc ? statusLabel : "");
-              
-              const statusIcon = isOnProgress ? (
-                <Clock className="w-6 h-6 text-amber-400" />
-              ) : isGood ? (
-                <CheckCircle className="w-6 h-6 text-emerald-400" />
-              ) : (
-                <XCircle className="w-6 h-6 text-rose-400" />
-              );
 
-              const overtime = card.finish_actual && card.estimated_finish
-                ? Math.max(0, (new Date(card.finish_actual).getTime() - new Date(card.estimated_finish).getTime()) / 1000)
-                : 0;
-              const overtimeLabel = overtime > 0
-                ? `Overtime +${Math.floor(overtime / 3600)}h:${String(Math.floor((overtime % 3600) / 60)).padStart(2, '0')}m`
-                : null;
+          {/* Kanban Board */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            {/* Column 1: To Do */}
+            <div className="flex flex-col gap-3 order-1">
+              <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 sticky top-0 z-10">
+                <h3 className="text-white font-semibold text-sm flex items-center justify-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+                  To Do
+                </h3>
+                <div className="text-xs text-gray-400 text-center mt-1">0 produk</div>
+              </div>
+              <div className="space-y-3 min-h-[200px] text-center">
+                <p className="text-gray-500 text-sm mt-8">Belum ada data</p>
+              </div>
+            </div>
 
-              return (
-                <Card key={card.id_product} className="bg-slate-900 border border-slate-800 h-full">
-                  <CardContent className="p-4 md:p-5 h-full flex">
-                    <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_0.9fr_1fr] gap-3 w-full items-center">
-                      <div className="space-y-1">
-                        <div className="text-lg font-semibold text-white">{card.product_name || "-"}</div>
-                        <div className="text-sm text-gray-300">{card.id_perproduct || card.id_product || "-"}</div>
-                        <div className="text-sm text-gray-400">{card.operator_actual_name || "-"}</div>
-                        {overtimeLabel && (
-                          <div className="text-sm font-semibold text-rose-400">{overtimeLabel}</div>
-                        )}
-                      </div>
+            {/* Column 2: On Progress */}
+            <div className="flex flex-col gap-3 order-2">
+              <div className="bg-amber-700/50 rounded-lg p-3 border border-amber-600 sticky top-0 z-10">
+                <h3 className="text-white font-semibold text-sm flex items-center justify-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-amber-400"></div>
+                  On Progress
+                </h3>
+                <div className="text-xs text-gray-200 text-center mt-1">
+                  {cards.filter(card => card.is_completed === 0).length} produk
+                </div>
+              </div>
+              <div className="space-y-3">
+                {cards
+                  .filter(card => card.is_completed === 0)
+                  .map((card) => {
+                    const overtime = card.finish_actual && card.estimated_finish
+                      ? Math.max(0, (new Date(card.finish_actual).getTime() - new Date(card.estimated_finish).getTime()) / 1000)
+                      : 0;
+                    const overtimeLabel = overtime > 0
+                      ? `Overtime +${Math.floor(overtime / 3600)}h:${String(Math.floor((overtime % 3600) / 60)).padStart(2, '0')}m`
+                      : null;
 
-                      <div className="flex flex-col gap-1 text-center">
-                        <div className="text-xs text-gray-400">Status</div>
-                        {displayLabel && (
-                          <div className="text-lg font-semibold text-white">{displayLabel}</div>
-                        )}
-                        <div className="flex items-center justify-center gap-2">{statusIcon}</div>
-                        <div className="text-xs text-gray-400">{displayStatus}</div>
-                      </div>
+                    return (
+                      <Card key={card.id_product} className="bg-slate-900 border border-slate-700 hover:border-amber-500 transition-colors">
+                        <CardContent className="px-4 py-3">
+                          <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="text-base font-semibold text-white truncate">{card.product_name || "-"}</div>
+                              <div className="text-sm text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
+                              <div className="text-sm text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
+                              {overtimeLabel && (
+                                <div className="text-sm font-semibold text-rose-400">{overtimeLabel}</div>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-0 text-right shrink-0">
+                              <div className="text-xs text-gray-400">Estimasi</div>
+                              <div className="text-sm text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
+                              <div className="text-xs text-gray-400 mt-1">Target</div>
+                              <div className="text-sm text-gray-300">{formatEst(card.total_duration)}</div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+              </div>
+            </div>
 
-                      <div className="space-y-1 text-right">
-                        <div>
-                          <div className="text-sm text-gray-300">Estimated </div>
-                          <div className="text-sm text-gray-300">{formatDateTime(card.estimated_finish)}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-gray-300">Finish Actual </div>
-                          <div className="text-sm text-gray-300">{formatDateTime(card.finish_actual)}</div>
-                        </div>
-                        <div className="text-xs text-gray-400">Target Durasi : {formatEst(card.total_duration)}</div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+            {/* Column 3: QC Process */}
+            <div className="flex flex-col gap-3 order-3">
+              <div className="bg-blue-700/50 rounded-lg p-3 border border-blue-600 sticky top-0 z-10">
+                <h3 className="text-white font-semibold text-sm flex items-center justify-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-400"></div>
+                  QC Process
+                </h3>
+                <div className="text-xs text-gray-200 text-center mt-1">
+                  {cards.filter(card => card.is_completed === 1 && !card.note_qc).length} produk
+                </div>
+              </div>
+              <div className="space-y-3">
+                {cards
+                  .filter(card => card.is_completed === 1 && !card.note_qc)
+                  .map((card) => {
+                    const overtime = card.finish_actual && card.estimated_finish
+                      ? Math.max(0, (new Date(card.finish_actual).getTime() - new Date(card.estimated_finish).getTime()) / 1000)
+                      : 0;
+                    const overtimeLabel = overtime > 0
+                      ? `Overtime +${Math.floor(overtime / 3600)}h:${String(Math.floor((overtime % 3600) / 60)).padStart(2, '0')}m`
+                      : null;
+
+                    return (
+                      <Card key={card.id_product} className="bg-slate-900 border border-slate-700 hover:border-blue-500 transition-colors">
+                        <CardContent className="px-4 py-3">
+                          <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="text-base font-semibold text-white truncate">{card.product_name || "-"}</div>
+                              <div className="text-sm text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
+                              <div className="text-sm text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
+                              <Badge className="bg-blue-600 text-white border-0 text-xs">Belum QC</Badge>
+                              {overtimeLabel && (
+                                <div className="text-sm font-semibold text-rose-400">{overtimeLabel}</div>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-0 text-right shrink-0">
+                              <div className="text-xs text-gray-400">Estimasi</div>
+                              <div className="text-sm text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
+                              <div className="text-xs text-gray-400 mt-1">Selesai</div>
+                              <div className="text-sm text-gray-300 whitespace-nowrap">{formatDateTime(card.finish_actual)}</div>
+                              <div className="text-xs text-gray-400 mt-1">Target</div>
+                              <div className="text-sm text-gray-300">{formatEst(card.total_duration)}</div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {/* Column 4: Finish Good */}
+            <div className="flex flex-col gap-3 order-4">
+              <div className="bg-emerald-700/50 rounded-lg p-3 border border-emerald-600 sticky top-0 z-10">
+                <h3 className="text-white font-semibold text-sm flex items-center justify-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-emerald-400"></div>
+                  Finish Good
+                </h3>
+                <div className="text-xs text-gray-200 text-center mt-1">
+                  {cards.filter(card => card.is_completed === 1 && card.note_qc && card.is_finish_good === 1).length} produk
+                </div>
+              </div>
+              <div className="space-y-3">
+                {cards
+                  .filter(card => card.is_completed === 1 && card.note_qc && card.is_finish_good === 1)
+                  .map((card) => {
+                    const overtime = card.finish_actual && card.estimated_finish
+                      ? Math.max(0, (new Date(card.finish_actual).getTime() - new Date(card.estimated_finish).getTime()) / 1000)
+                      : 0;
+                    const overtimeLabel = overtime > 0
+                      ? `Overtime +${Math.floor(overtime / 3600)}h:${String(Math.floor((overtime % 3600) / 60)).padStart(2, '0')}m`
+                      : null;
+
+                    return (
+                      <Card key={card.id_product} className="bg-slate-900 border border-slate-700 hover:border-emerald-500 transition-colors">
+                        <CardContent className="px-4 py-3">
+                          <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="text-base font-semibold text-white truncate">{card.product_name || "-"}</div>
+                              <div className="text-sm text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
+                              <div className="text-sm text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
+                              <Badge className="bg-emerald-600 text-white border-0 text-xs">Finish Good</Badge>
+                              {overtimeLabel && (
+                                <div className="text-sm font-semibold text-rose-400">{overtimeLabel}</div>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-0 text-right shrink-0">
+                              <div className="text-xs text-gray-400">Estimasi</div>
+                              <div className="text-sm text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
+                              <div className="text-xs text-gray-400 mt-1">Selesai</div>
+                              <div className="text-sm text-gray-300 whitespace-nowrap">{formatDateTime(card.finish_actual)}</div>
+                              <div className="text-xs text-gray-400 mt-1">Target</div>
+                              <div className="text-sm text-gray-300">{formatEst(card.total_duration)}</div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Ringkasan */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="bg-gray-800/50 border border-gray-700/60">
-            <CardContent className="p-4">
-              <div className="text-sm text-gray-400">Total Proses</div>
-              <div className="text-3xl font-bold text-white">{stats.total_processes ?? 0}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gray-800/50 border border-gray-700/60">
-            <CardContent className="p-4">
-              <div className="text-sm text-gray-400">Selesai</div>
-              <div className="text-3xl font-bold text-emerald-400">{stats.completed ?? 0}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gray-800/50 border border-gray-700/60">
-            <CardContent className="p-4">
-              <div className="text-sm text-gray-400">Sedang Berjalan</div>
-              <div className="text-3xl font-bold text-amber-400">{stats.in_progress ?? 0}</div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Ringkasan Status */}
+        {statusSummary ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {/* Selesai Produksi */}
+            <Card className="bg-emerald-900/40 border border-emerald-700/60 hover:border-emerald-600 transition-colors">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs text-gray-300 uppercase tracking-wide">Selesai</div>
+                    <div className="text-2xl font-bold text-emerald-400">{statusSummary.selesai_produksi}</div>
+                    <div className="text-xs text-gray-400 mt-1">Produk</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* On Progress */}
+            <Card className="bg-amber-900/40 border border-amber-700/60 hover:border-amber-600 transition-colors">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <Activity className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs text-gray-300 uppercase tracking-wide">On Progress</div>
+                    <div className="text-2xl font-bold text-amber-400">{statusSummary.on_progress}</div>
+                    <div className="text-xs text-gray-400 mt-1">Produk</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Finish Good */}
+            <Card className="bg-emerald-900/40 border border-emerald-700/60 hover:border-emerald-600 transition-colors">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs text-gray-300 uppercase tracking-wide">Finish Good</div>
+                    <div className="text-2xl font-bold text-emerald-400">{statusSummary.finish_good}</div>
+                    <div className="text-xs text-gray-400 mt-1">Produk</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Not OK */}
+            <Card className="bg-rose-900/40 border border-rose-700/60 hover:border-rose-600 transition-colors">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <XCircle className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs text-gray-300 uppercase tracking-wide">Not OK</div>
+                    <div className="text-2xl font-bold text-rose-400">{statusSummary.not_ok}</div>
+                    <div className="text-xs text-gray-400 mt-1">Produk</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Gangguan */}
+            <Card className="bg-rose-900/40 border border-rose-700/60 hover:border-rose-600 transition-colors">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs text-gray-300 uppercase tracking-wide">Gangguan</div>
+                    <div className="text-2xl font-bold text-rose-400">{statusSummary.gangguan}</div>
+                    <div className="text-xs text-gray-400 mt-1">Kejadian</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tunggu */}
+            <Card className="bg-amber-900/40 border border-amber-700/60 hover:border-amber-600 transition-colors">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <PauseCircle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs text-gray-300 uppercase tracking-wide">Tunggu</div>
+                    <div className="text-2xl font-bold text-amber-400">{statusSummary.tunggu}</div>
+                    <div className="text-xs text-gray-400 mt-1">Kejadian</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <div className="p-4 bg-gray-900/40 border border-gray-700/60 rounded-lg">
+            <p className="text-gray-400 text-center">Loading status summary...</p>
+          </div>
+        )}
 
         {/* Daftar operator aktif per WS */}
         <Card className="bg-gray-800/50 border border-gray-700/60">

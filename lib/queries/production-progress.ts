@@ -451,6 +451,15 @@ export interface ProductionEstimate {
   estimated_finish: Date | string | null;
 }
 
+export interface ProductStatusSummary {
+  selesai_produksi: number;
+  on_progress: number;
+  finish_good: number;
+  not_ok: number;
+  gangguan: number;
+  tunggu: number;
+}
+
 export interface ProductStatusCard {
   id_product: string;
   id_perproduct: string | null;
@@ -670,5 +679,82 @@ export async function logProductionProgressSample(limit: number = 10): Promise<P
   } catch (error) {
     console.error("Failed to log production progress sample:", error);
     return [];
+  }
+}
+
+// Get production status summary
+export async function getProductStatusSummary(daysBack: number = 7): Promise<ProductStatusSummary> {
+  try {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysBack);
+    
+    const result = await db.execute(sql`
+      SELECT
+        /* Selesai Produksi */
+        COUNT(DISTINCT CASE
+            WHEN status LIKE 'Selesai WS%' THEN id_perproduct
+        END) AS selesai_produksi,
+
+        /* On Progress */
+        COUNT(DISTINCT CASE
+            WHEN status LIKE 'Masuk WS%' THEN id_perproduct
+        END) AS on_progress,
+
+        /* Finish Good */
+        COUNT(DISTINCT CASE
+            WHEN status = 'Finish Good' THEN id_perproduct
+        END) AS finish_good,
+
+        /* Not OK */
+        COUNT(DISTINCT CASE
+            WHEN status = 'Not OK' THEN id_perproduct
+        END) AS not_ok,
+
+        /* Gangguan (hitung semua kejadian) */
+        SUM(CASE
+            WHEN status LIKE '%Gangguan%' THEN 1
+            ELSE 0
+        END) AS gangguan,
+
+        /* Tunggu (hitung semua kejadian) */
+        SUM(CASE
+            WHEN status LIKE '%Tunggu%' THEN 1
+            ELSE 0
+        END) AS tunggu
+      FROM production_progress
+      WHERE start_actual >= ${startDate}
+    `);
+    
+    const rows = extractRows(result);
+    if (rows.length > 0) {
+      const row = rows[0];
+      return {
+        selesai_produksi: Number(row.selesai_produksi || 0),
+        on_progress: Number(row.on_progress || 0),
+        finish_good: Number(row.finish_good || 0),
+        not_ok: Number(row.not_ok || 0),
+        gangguan: Number(row.gangguan || 0),
+        tunggu: Number(row.tunggu || 0),
+      };
+    }
+    
+    return {
+      selesai_produksi: 0,
+      on_progress: 0,
+      finish_good: 0,
+      not_ok: 0,
+      gangguan: 0,
+      tunggu: 0,
+    };
+  } catch (error) {
+    console.error("Failed to fetch status summary:", error);
+    return {
+      selesai_produksi: 0,
+      on_progress: 0,
+      finish_good: 0,
+      not_ok: 0,
+      gangguan: 0,
+      tunggu: 0,
+    };
   }
 }

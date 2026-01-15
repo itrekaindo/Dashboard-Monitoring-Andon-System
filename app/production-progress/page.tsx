@@ -48,15 +48,11 @@ export const dynamic = "force-dynamic";
 
 export default async function ProductionProgressDashboard() {
   // Fetch server-side so data stays up-to-date on load
-  const [stats, workstationStats, recent] = await Promise.all<[
-    ProductionStats,
-    WorkstationStats[],
-    ProductionProgress[],
-  ]>([
+  const [stats, workstationStats, recent] = await Promise.all([
     getProductionStats(),
     getWorkstationStats(),
     getRecentProductionProgress(20),
-  ]);
+  ]) as [ProductionStats, WorkstationStats[], ProductionProgress[]];
 
   const cards = [
     {
