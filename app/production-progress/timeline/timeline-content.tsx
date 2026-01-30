@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, MapPin, Users, ChevronRight, Clock, CheckCircle, XCircle, AlertCircle, PauseCircle } from "lucide-react";
 import Elapsed from "@/components/ui/elapsed";
+import ProductionProgressTable from "@/components/production/ProductionProgressTable";
 import type { ProductionStats, WorkstationStats, ProductionProgress, CurrentWorkstationProgress, WorkstationDuration, ProductionEstimate, ProductStatusCard, ProductStatusSummary } from "@/lib/queries/production-progress";
 
 interface TimelineContentProps {
@@ -85,10 +86,39 @@ function statusVariant(status?: string) {
   if (lower.includes("tunggu")) {
     return { bg: "bg-amber-400", border: "border-amber-300", text: "text-gray-900", blink: true };
   }
-  if (lower.includes("masuk ws")) {
+  if (lower.includes("masuk")) {
     return { bg: "bg-emerald-500", border: "border-emerald-300", text: "text-white", blink: false };
   }
   return { bg: "bg-gray-700", border: "border-gray-500", text: "text-white", blink: false };
+}
+
+function getStatusColor(status?: string | null) {
+  if (!status) return { bg: 'bg-gray-700/20', border: 'border-gray-600', text: 'text-gray-300' };
+  
+  const lower = status.toLowerCase();
+  if (lower.includes('gangguan')) {
+    return { bg: 'bg-rose-900/30', border: 'border-rose-600', text: 'text-rose-300' };
+  }
+  if (lower.includes('tunggu')) {
+    return { bg: 'bg-amber-900/30', border: 'border-amber-600', text: 'text-amber-300' };
+  }
+  if (lower.includes('selesai ws') || lower.includes('finish')) {
+    return { bg: 'bg-emerald-900/30', border: 'border-emerald-600', text: 'text-emerald-300' };
+  }
+  if (lower.includes('not ok') || lower.includes('tidak ok')) {
+    return { bg: 'bg-red-900/30', border: 'border-red-600', text: 'text-red-300' };
+  }
+  if (lower.includes('masuk')) {
+    return { bg: 'bg-blue-900/30', border: 'border-blue-600', text: 'text-blue-300' };
+  }
+  if (lower.includes('login')) {
+    return { bg: 'bg-blue-900/30', border: 'border-blue-600', text: 'text-blue-300' };
+  }
+  if (lower.includes('logout')) {
+    return { bg: 'bg-orange-900/30', border: 'border-orange-600', text: 'text-orange-300' };
+  }
+  
+  return { bg: 'bg-gray-700/20', border: 'border-gray-600', text: 'text-gray-300' };
 }
 
 export default function TimelineContent({
@@ -252,7 +282,8 @@ export default function TimelineContent({
                   const info = statusInfo.get(ws.workstation ?? 0);
                   const status = info?.status;
                   const variant = statusVariant(status);
-                  const showElapsed = (status || "").toLowerCase().includes("masuk ws") && variant.bg.includes("emerald");
+                  const showElapsed = (status || "").toLowerCase().includes("masuk") && variant.bg.includes("emerald");
+                  const showWaitingElapsed = (status || "").toLowerCase().includes("tunggu");
                   const baseClass = `${variant.bg} ${variant.border} ${variant.text}`;
                   const blinkClass = variant.blink ? "animate-pulse" : "";
 
@@ -307,6 +338,10 @@ export default function TimelineContent({
                         <div className="text-xs text-gray-300 text-center truncate">{ws.active_operator || "-"}</div>
                         {showElapsed ? (
                           <Elapsed since={info?.at} className="text-[11px] text-gray-400 text-center truncate" />
+                        ) : showWaitingElapsed && info?.at ? (
+                          <div className="text-[11px] text-amber-400 text-center truncate font-semibold">
+                            <Elapsed since={info?.at} />
+                          </div>
                         ) : (
                           <span className="text-[11px] text-gray-400 text-center truncate">
                             {formatEst(durations.find(d => d.workstation === ws.workstation)?.actual_duration || null)}
@@ -384,6 +419,10 @@ export default function TimelineContent({
                     const overtimeLabel = overtime > 0
                       ? `Overtime +${Math.floor(overtime / 3600)}h:${String(Math.floor((overtime % 3600) / 60)).padStart(2, '0')}m`
                       : null;
+                    
+                    // Check if status is "Tunggu" (waiting)
+                    const isWaiting = card.status?.toLowerCase().includes('tunggu');
+                    const statusColor = getStatusColor(card.status);
 
                     return (
                       <Card key={card.id_product} className="bg-slate-900 border border-slate-700 hover:border-amber-500 transition-colors">
@@ -393,6 +432,11 @@ export default function TimelineContent({
                               <div className="text-base font-semibold text-white truncate">{card.product_name || "-"}</div>
                               <div className="text-sm text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
                               <div className="text-sm text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
+                              {isWaiting && (
+                                <Badge className={`${statusColor.bg} ${statusColor.border} ${statusColor.text} border text-xs font-semibold`}>
+                                  ⏸ {card.status}
+                                </Badge>
+                              )}
                               {overtimeLabel && (
                                 <div className="text-sm font-semibold text-rose-400">{overtimeLabel}</div>
                               )}
@@ -419,13 +463,13 @@ export default function TimelineContent({
                   QC Process
                 </h3>
                 <div className="text-xs text-gray-200 text-center mt-1">
-                  {cards.filter(card => card.is_completed === 1 && !card.note_qc).length} produk
+                  {cards.filter(card => card.is_completed === 1 || card.status !== 'Finish Good' || card.status == 'Tunggu QC').length} produk
                 </div>
               </div>
               <div className="space-y-3">
                 {cards
-                  .filter(card => card.is_completed === 1 && !card.note_qc)
-                  .map((card) => {
+                  .filter(card => card.is_completed === 1 && card.status !== 'Finish Good')
+                  .map((card, idx) => {
                     const overtime = card.finish_actual && card.estimated_finish
                       ? Math.max(0, (new Date(card.finish_actual).getTime() - new Date(card.estimated_finish).getTime()) / 1000)
                       : 0;
@@ -434,7 +478,7 @@ export default function TimelineContent({
                       : null;
 
                     return (
-                      <Card key={card.id_product} className="bg-slate-900 border border-slate-700 hover:border-blue-500 transition-colors">
+                      <Card key={`${card.id_product}-${idx}`} className="bg-slate-900 border border-slate-700 hover:border-blue-500 transition-colors">
                         <CardContent className="px-4 py-3">
                           <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
                             <div className="space-y-0.5 min-w-0">
@@ -470,12 +514,12 @@ export default function TimelineContent({
                   Finish Good
                 </h3>
                 <div className="text-xs text-gray-200 text-center mt-1">
-                  {cards.filter(card => card.is_completed === 1 && card.note_qc && card.is_finish_good === 1).length} produk
+                  {cards.filter(card => card.status === 'Finish Good').length} produk
                 </div>
               </div>
               <div className="space-y-3">
                 {cards
-                  .filter(card => card.is_completed === 1 && card.note_qc && card.is_finish_good === 1)
+                  .filter(card => card.status === 'Finish Good')
                   .map((card) => {
                     const overtime = card.finish_actual && card.estimated_finish
                       ? Math.max(0, (new Date(card.finish_actual).getTime() - new Date(card.estimated_finish).getTime()) / 1000)
@@ -524,7 +568,7 @@ export default function TimelineContent({
                 <div className="flex items-start gap-3">
                   <CheckCircle className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
                   <div className="min-w-0">
-                    <div className="text-xs text-gray-300 uppercase tracking-wide">Selesai</div>
+                    <div className="text-xs text-gray-300 uppercase tracking-wide">Selesai Produksi</div>
                     <div className="text-2xl font-bold text-emerald-400">{statusSummary.selesai_produksi}</div>
                     <div className="text-xs text-gray-400 mt-1">Produk</div>
                   </div>
@@ -633,6 +677,11 @@ export default function TimelineContent({
             </div>
           </CardContent>
         </Card>
+
+        {/* Production Progress Detailed Table */}
+        <div className="bg-gray-900/60 border border-gray-700/60 backdrop-blur-sm rounded-lg p-6">
+          <ProductionProgressTable data={recent} />
+        </div>
       </div>
     </>
   );

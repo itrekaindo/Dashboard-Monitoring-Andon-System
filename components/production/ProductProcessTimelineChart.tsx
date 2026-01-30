@@ -190,7 +190,7 @@ export function ProductProcessTimelineChart({ data, picAssyData = [], avgDuratio
                     borderRadius: '0.5rem',
                   }}
                   cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }}
-                  formatter={(value: any, name: string, props: any) => {
+                  formatter={(value: any, name: string | undefined, props: any) => {
                     if (name === 'duration_min') {
                       return [props.payload.duration_formatted, avgDurationData.length > 0 ? 'Rata-rata Durasi' : 'Durasi'];
                     }
@@ -199,7 +199,7 @@ export function ProductProcessTimelineChart({ data, picAssyData = [], avgDuratio
                     }
                     return [value, name];
                   }}
-                  contentRenderer={(props: any) => {
+                  content={(props: any) => {
                     if (!props.active || !props.payload?.length) return null;
                     const data = props.payload[0]?.payload;
                     return (
@@ -295,7 +295,6 @@ export function ProductProcessTimelineChart({ data, picAssyData = [], avgDuratio
                               {item.trainset ?? '-'}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-gray-300">{item.pic_assy || '-'}</TableCell>
                           <TableCell className="text-gray-400 text-sm">{dateStr}</TableCell>
                           <TableCell className="text-emerald-400 font-mono text-sm">{startTimeStr}</TableCell>
                           <TableCell className="text-rose-400 font-mono text-sm">{endTimeStr}</TableCell>

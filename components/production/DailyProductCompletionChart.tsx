@@ -35,7 +35,7 @@ export function DailyProductCompletionChart({ data }: DailyProductCompletionChar
   ];
 
   // Get unique products
-  const uniqueProducts = Array.from(new Set(data.map(item => item.nama_produk))).filter(Boolean);
+  const uniqueProducts = Array.from(new Set(data.map(item => item.nama_produk).filter((p): p is string => Boolean(p))));
 
   // Assign colors to products
   const productColorMap = new Map(
@@ -102,7 +102,7 @@ export function DailyProductCompletionChart({ data }: DailyProductCompletionChar
                 contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151' }}
                 labelStyle={{ color: '#fff' }}
                 cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }}
-                formatter={(value: any, name: string, props: any) => {
+                formatter={(value: any, name: string | undefined, props: any) => {
                   if (name === 'total') {
                     return [value, 'Total Selesai'];
                   }

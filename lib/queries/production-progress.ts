@@ -29,6 +29,7 @@ export interface ProductionProgress {
   status: string | null;
   note_qc?: string | null;
   finish_actual: Date | string | null;
+  ideal_duration_time?: string | null;
 }
 
 export interface ProductionStats {
@@ -411,9 +412,14 @@ export async function getWorkstationStatsByLine(line: string): Promise<Workstati
 export async function getRecentProductionProgress(limit: number = 100): Promise<ProductionProgress[]> {
   try {
     const result = await db.execute(sql`
-SELECT * FROM production_progress
-WHERE DATE(start_actual) = CURDATE()
-ORDER BY start_actual DESC
+      SELECT 
+        pp.*,
+        it.duration_time as ideal_duration_time
+      FROM production_progress pp
+      LEFT JOIN ideal_time it 
+        ON pp.id_product = it.id_product 
+        AND pp.workstation = it.workstation
+      ORDER BY pp.start_actual DESC
       LIMIT ${limit}
     `);
     
@@ -471,6 +477,7 @@ export interface ProductStatusCard {
   estimated_finish: Date | string | null;
   is_finish_good: number;
   note_qc: string | null;
+  status: string | null;
   current_workstation: number | null;
   is_completed: number;
 }
@@ -496,6 +503,7 @@ WITH RankedData AS (
         ON pp.id_product = t.id_product 
         AND pp.workstation = t.workstation
     WHERE DATE(pp.start_actual) = CURDATE()
+    AND pp.status NOT IN ('Tunggu Selesai', 'Gangguan Selesai')
 )
 SELECT * FROM RankedData 
 WHERE urutan = 1;
@@ -586,11 +594,16 @@ SELECT
   ws1.ws1_start_actual as start_actual,
   l.finish_actual,
   l.note_qc,
+  l.status,
   l.workstation as current_workstation,
   it.duration_time AS total_duration,
   DATE_ADD(ws1.ws1_start_actual, INTERVAL TIME_TO_SEC(it.duration_time) SECOND) AS estimated_finish,
-  CASE WHEN l.note_qc = 'Finish Good' THEN 1 ELSE 0 END AS is_finish_good,
-  CASE WHEN l.finish_actual IS NOT NULL THEN 1 ELSE 0 END AS is_completed
+  CASE WHEN l.status = 'Finish Good' THEN 1 ELSE 0 END AS is_finish_good,
+  CASE 
+    WHEN l.finish_actual IS NOT NULL THEN 1
+    WHEN l.status = 'Tunggu QC' AND l.status NOT IN ('Tunggu Selesai', 'Gangguan Selesai') THEN 1
+    ELSE 0 
+  END AS is_completed
 FROM latest l
 LEFT JOIN ws1_start ws1 ON l.id_perproduct = ws1.id_perproduct
 LEFT JOIN ideal_time it
@@ -689,6 +702,14 @@ export async function getProductStatusSummary(daysBack: number = 7): Promise<Pro
     startDate.setDate(startDate.getDate() - daysBack);
     
     const result = await db.execute(sql`
+      WITH LatestStatus AS (
+        SELECT 
+          id_perproduct,
+          status,
+          ROW_NUMBER() OVER (PARTITION BY id_perproduct ORDER BY start_actual DESC) AS rn
+        FROM production_progress
+        WHERE start_actual >= ${startDate}
+      )
       SELECT
         /* Selesai Produksi */
         COUNT(DISTINCT CASE
@@ -697,7 +718,7 @@ export async function getProductStatusSummary(daysBack: number = 7): Promise<Pro
 
         /* On Progress */
         COUNT(DISTINCT CASE
-            WHEN status LIKE 'Masuk WS%' THEN id_perproduct
+            WHEN status LIKE 'Masuk%' THEN id_perproduct
         END) AS on_progress,
 
         /* Finish Good */
@@ -711,18 +732,16 @@ export async function getProductStatusSummary(daysBack: number = 7): Promise<Pro
         END) AS not_ok,
 
         /* Gangguan (hitung semua kejadian) */
-        SUM(CASE
+        COUNT(CASE
             WHEN status LIKE '%Gangguan%' THEN 1
-            ELSE 0
         END) AS gangguan,
 
         /* Tunggu (hitung semua kejadian) */
-        SUM(CASE
+        COUNT(CASE
             WHEN status LIKE '%Tunggu%' THEN 1
-            ELSE 0
         END) AS tunggu
-      FROM production_progress
-      WHERE start_actual >= ${startDate}
+      FROM LatestStatus
+      WHERE rn = 1
     `);
     
     const rows = extractRows(result);
