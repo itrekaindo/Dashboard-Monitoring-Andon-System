@@ -283,7 +283,10 @@ export default function TimelineContent({
                   const status = info?.status;
                   const variant = statusVariant(status);
                   const showElapsed = (status || "").toLowerCase().includes("masuk") && variant.bg.includes("emerald");
-                  const showWaitingElapsed = (status || "").toLowerCase().includes("tunggu");
+                  const isWaitingMulai = (status || "").toLowerCase().includes("tunggu mulai");
+                  const isWaitingSelesai = (status || "").toLowerCase().includes("tunggu selesai");
+                  const showWaitingElapsed = isWaitingMulai && !isWaitingSelesai;
+                  const isPausedWaiting = isWaitingSelesai;
                   const baseClass = `${variant.bg} ${variant.border} ${variant.text}`;
                   const blinkClass = variant.blink ? "animate-pulse" : "";
 
@@ -340,7 +343,7 @@ export default function TimelineContent({
                           <Elapsed since={info?.at} className="text-[11px] text-gray-400 text-center truncate" />
                         ) : showWaitingElapsed && info?.at ? (
                           <div className="text-[11px] text-amber-400 text-center truncate font-semibold">
-                            <Elapsed since={info?.at} />
+                            <Elapsed since={info?.at} isPaused={isPausedWaiting} />
                           </div>
                         ) : (
                           <span className="text-[11px] text-gray-400 text-center truncate">
@@ -463,7 +466,7 @@ export default function TimelineContent({
                   QC Process
                 </h3>
                 <div className="text-xs text-gray-200 text-center mt-1">
-                  {cards.filter(card => card.is_completed === 1 || card.status !== 'Finish Good' || card.status == 'Tunggu QC').length} produk
+                  {cards.filter(card => card.is_completed === 1 || card.status !== 'Finish Good').length} produk
                 </div>
               </div>
               <div className="space-y-3">

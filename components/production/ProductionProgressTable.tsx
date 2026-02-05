@@ -415,7 +415,10 @@ export default function ProductionProgressTable({ data }: ProductionProgressTabl
               sorted.map((item, idx) => {
                 const statusColor = getStatusColor(item.status);
                 const statusIcon = getStatusIcon(item.status);
-                const isWaiting = item.status?.toLowerCase().includes('tunggu');
+                const isWaitingMulai = item.status?.toLowerCase().includes('tunggu mulai');
+                const isWaitingSelesai = item.status?.toLowerCase().includes('tunggu selesai');
+                const showElapsed = isWaitingMulai && !isWaitingSelesai;
+                const isPaused = isWaitingSelesai;
 
                 return (
                   <tr key={`${item.id_process}-${idx}`} className="hover:bg-gray-800/50 transition-colors">
@@ -438,8 +441,8 @@ export default function ProductionProgressTable({ data }: ProductionProgressTabl
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-gray-300 text-sm">
-                        {item.duration_time_actual || (isWaiting && item.start_actual ? 
-                          <Elapsed since={item.start_actual} className="text-amber-400 font-semibold" /> 
+                        {item.duration_time_actual || (showElapsed && item.start_actual ? 
+                          <Elapsed since={item.start_actual} className="text-amber-400 font-semibold" isPaused={isPaused} /> 
                           : '—')}
                       </span>
                     </td>

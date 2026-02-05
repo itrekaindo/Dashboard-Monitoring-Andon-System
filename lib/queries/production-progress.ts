@@ -601,7 +601,7 @@ SELECT
   CASE WHEN l.status = 'Finish Good' THEN 1 ELSE 0 END AS is_finish_good,
   CASE 
     WHEN l.finish_actual IS NOT NULL THEN 1
-    WHEN l.status = 'Tunggu QC' AND l.status NOT IN ('Tunggu Selesai', 'Gangguan Selesai') THEN 1
+    WHEN l.status = 'Tunggu QC' AND l.status NOT IN ('Tunggu Selesai', 'Gangguan Selesai', 'On Progress') THEN 1
     ELSE 0 
   END AS is_completed
 FROM latest l

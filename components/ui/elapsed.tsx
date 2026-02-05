@@ -11,7 +11,7 @@ function formatElapsed(ms: number) {
   return `${h}j ${m}m ${s}d`
 }
 
-export default function Elapsed({ since, className }: { since?: string | Date | null, className?: string }) {
+export default function Elapsed({ since, className, isPaused = false }: { since?: string | Date | null, className?: string, isPaused?: boolean }) {
   const start = useMemo(() => {
     if (!since) return null
     try {
@@ -24,9 +24,10 @@ export default function Elapsed({ since, className }: { since?: string | Date | 
   const [, forceTick] = useState(0)
 
   useEffect(() => {
+    if (isPaused) return
     const id = setInterval(() => forceTick((v) => v + 1), 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [isPaused])
 
   if (!start || isNaN(start.getTime())) return <span className={className}>—</span>
   const now = new Date()
