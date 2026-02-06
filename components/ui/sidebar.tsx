@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, ReactNode } from 'react';
+import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, 
@@ -52,8 +53,8 @@ const MenuItemComponent = ({
   onNavigate,
   toggleSubmenu 
 }: MenuItemProps) => {
-  const isActive = activeMenu === item.id;
-  const isExpanded = expandedMenus.includes(item.id);
+  const isActive = activeMenu === item.id || activeMenu.startsWith(`${item.id}-`);
+  const isExpanded = expandedMenus.includes(item.id) || activeMenu.startsWith(`${item.id}-`);
   const hasSubmenu = item.submenu && item.submenu.length > 0;
 
   const handleClick = () => {
@@ -137,6 +138,8 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
     if (pathname.startsWith('/material')) return 'material';
     if (pathname.startsWith('/operator')) return 'operator';
     if (pathname.startsWith('/schedule')) return 'schedule';
+    if (pathname.startsWith('/production-progress')) return 'production-workstation';
+    if (pathname.startsWith('/production/logs')) return 'production-log';
     if (pathname.startsWith('/settings')) return 'settings';
     return 'dashboard';
   };
@@ -181,6 +184,23 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
       label: 'Schedule',
       icon: FileText,
       path: '/schedule'
+    },
+    {
+      id: 'production',
+      label: 'Production',
+      icon: Activity,
+      submenu: [
+        {
+          id: 'production-workstation',
+          label: 'Lantai 3',
+          path: '/production-progress/timeline'
+        },
+        {
+          id: 'production-log',
+          label: 'Riwayat Data Kanban',
+          path: '/production/logs'
+        }
+      ]
     }
   ];
 
@@ -196,24 +216,12 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
         `}
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-800/50">
-          <div className="flex items-center justify-between">
-            {isOpen ? (
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-                  <Activity className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-white font-bold text-lg">Andon System</h1>
-                  <p className="text-gray-400 text-xs">Production Monitor</p>
-                </div>
-              </div>
-            ) : (
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mx-auto shadow-lg shadow-blue-500/30">
-                <Activity className="w-6 h-6 text-white" />
-              </div>
-            )}
-          </div>
+        <div className="p-4 border-b border-gray-800/50 flex items-center justify-center">
+          {isOpen ? (
+            <Image src="/assets/logo/logo.png" alt="Andon Logo" width={180} height={80} className="object-contain" />
+          ) : (
+            <Image src="/assets/logo/logo.png" alt="Andon Logo" width={50} height={50} className="object-contain" />
+          )}
         </div>
 
         {/* Search Bar */}
