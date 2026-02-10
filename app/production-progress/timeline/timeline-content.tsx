@@ -140,6 +140,7 @@ export default function TimelineContent({
   const [estimate, setEstimate] = useState<ProductionEstimate | null>(initialEstimate);
   const [cards, setCards] = useState<ProductStatusCard[]>(initialCards);
   const [statusSummary, setStatusSummary] = useState<ProductStatusSummary | null>(initialStatusSummary || null);
+  const [schedule, setSchedule] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [daysBack, setDaysBack] = useState(7);
 
@@ -161,6 +162,7 @@ export default function TimelineContent({
       setDurations(data.durations);
       setEstimate(data.estimate);
       setCards(data.cards || []);
+      setSchedule(data.schedule || []);
       setStatusSummary(data.statusSummary || null);
     } catch (error) {
       console.error('Failed to refresh data:', error);
@@ -172,6 +174,7 @@ export default function TimelineContent({
   // Auto-refresh every 1 minute
   useEffect(() => {
     let isMounted = true;
+    fetchData();
     
     const interval = setInterval(() => {
       if (isMounted) {
@@ -394,10 +397,62 @@ export default function TimelineContent({
                   <div className="w-3 h-3 rounded-full bg-gray-400"></div>
                   To Do
                 </h3>
-                <div className="text-xs text-gray-400 text-center mt-1">0 produk</div>
+                <div className="text-xs text-gray-400 text-center mt-1">{schedule.length} produk</div>
               </div>
-              <div className="space-y-3 min-h-[200px] text-center">
-                <p className="text-gray-500 text-sm mt-8">Belum ada data</p>
+              <div className="space-y-3">
+                {schedule.length > 0 ? (
+                  schedule.map((product: any, idx: number) => {
+                    const total = product.total || 0;
+                    const jumlahTungguQc = product.jumlah_tunggu_qc || 0;
+                    const totalFinishedQc = product.jumlah_finish_good || 0;
+                    // Produk dianggap selesai jika sudah Finish Good
+                    const isComplete = totalFinishedQc === total && total > 0;
+                    const tanggalSelesai = product.tanggal_selesai ? new Date(product.tanggal_selesai) : null;
+                    const today = new Date();
+                    const isOverdue = tanggalSelesai && today > tanggalSelesai && jumlahTungguQc < total;
+                    const presentase = total > 0 ? Math.round((jumlahTungguQc / total) * 100) : 0;
+                    
+                    // Jangan tampilkan jika sudah selesai (total_finished_qc = total)
+                    if (isComplete) return null;
+
+                    return (
+                      <Card key={`todo-${product.id_product}-${idx}`} className="bg-slate-900 border border-slate-700 hover:border-gray-500 transition-colors">
+                        <CardContent className="px-4 py-3">
+                          <div className="grid grid-cols-[1fr_auto] gap-4 items-start">
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="text-base font-semibold text-white truncate">{product.product_name || "-"}</div>
+                              <div className="text-sm text-gray-300 truncate">{product.id_product || "-"}</div>
+                              <div className="text-sm text-gray-400 truncate">Personil: {product.total_personil || "-"}</div>
+                              <Badge className={`border-0 text-xs font-semibold ${
+                                isOverdue 
+                                  ? 'bg-red-600 text-white' 
+                                  : 'bg-gray-600 text-white'
+                              }`}>
+                                {isOverdue ? 'Terlambat / Tidak Tercatat' : 'To Do'}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-col gap-1 text-right shrink-0">
+                              <div className="text-sm font-semibold text-white whitespace-nowrap">
+                                {jumlahTungguQc} / {total}
+                              </div>
+                              <div className="text-xs text-gray-300 whitespace-nowrap mt-1">
+                                <span className="text-gray-400">Mulai:</span> {product.tanggal_mulai ? new Date(product.tanggal_mulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : "-"}
+                              </div>
+                              <div className="text-xs text-gray-300 whitespace-nowrap">
+                                <span className="text-gray-400">Selesai:</span> {product.tanggal_selesai ? new Date(product.tanggal_selesai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : "-"}
+                              </div>
+                              <div className="text-xs text-gray-300 whitespace-nowrap">
+                                <span className="text-gray-400">Presentase:</span> {presentase}%
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  }).filter(Boolean)
+                ) : (
+                  <p className="text-gray-500 text-sm mt-8 text-center">Belum ada data</p>
+                )}
               </div>
             </div>
 
@@ -415,20 +470,13 @@ export default function TimelineContent({
               <div className="space-y-3">
                 {cards
                   .filter(card => card.is_completed === 0)
-                  .map((card) => {
-                    const overtime = card.finish_actual && card.estimated_finish
-                      ? Math.max(0, (new Date(card.finish_actual).getTime() - new Date(card.estimated_finish).getTime()) / 1000)
-                      : 0;
-                    const overtimeLabel = overtime > 0
-                      ? `Overtime +${Math.floor(overtime / 3600)}h:${String(Math.floor((overtime % 3600) / 60)).padStart(2, '0')}m`
-                      : null;
-                    
+                  .map((card, idx) => {
                     // Check if status is "Tunggu" (waiting)
                     const isWaiting = card.status?.toLowerCase().includes('tunggu');
                     const statusColor = getStatusColor(card.status);
 
                     return (
-                      <Card key={card.id_product} className="bg-slate-900 border border-slate-700 hover:border-amber-500 transition-colors">
+                      <Card key={`progress-${card.id_product}-${idx}`} className="bg-slate-900 border border-slate-700 hover:border-amber-500 transition-colors">
                         <CardContent className="px-4 py-3">
                           <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
                             <div className="space-y-0.5 min-w-0">
@@ -439,9 +487,6 @@ export default function TimelineContent({
                                 <Badge className={`${statusColor.bg} ${statusColor.border} ${statusColor.text} border text-xs font-semibold`}>
                                   ⏸ {card.status}
                                 </Badge>
-                              )}
-                              {overtimeLabel && (
-                                <div className="text-sm font-semibold text-rose-400">{overtimeLabel}</div>
                               )}
                             </div>
                             <div className="flex flex-col gap-0 text-right shrink-0">
@@ -472,7 +517,7 @@ export default function TimelineContent({
               <div className="space-y-3">
                 {cards
                   .filter(card => card.is_completed === 1 && card.status !== 'Finish Good')
-                  .map((card, idx) => {
+                  .map((card, qcIdx) => {
                     const overtime = card.finish_actual && card.estimated_finish
                       ? Math.max(0, (new Date(card.finish_actual).getTime() - new Date(card.estimated_finish).getTime()) / 1000)
                       : 0;
@@ -481,7 +526,7 @@ export default function TimelineContent({
                       : null;
 
                     return (
-                      <Card key={`${card.id_product}-${idx}`} className="bg-slate-900 border border-slate-700 hover:border-blue-500 transition-colors">
+                      <Card key={`qc-${card.id_product}-${qcIdx}`} className="bg-slate-900 border border-slate-700 hover:border-blue-500 transition-colors">
                         <CardContent className="px-4 py-3">
                           <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
                             <div className="space-y-0.5 min-w-0">
@@ -523,7 +568,7 @@ export default function TimelineContent({
               <div className="space-y-3">
                 {cards
                   .filter(card => card.status === 'Finish Good')
-                  .map((card) => {
+                  .map((card, fgIdx) => {
                     const overtime = card.finish_actual && card.estimated_finish
                       ? Math.max(0, (new Date(card.finish_actual).getTime() - new Date(card.estimated_finish).getTime()) / 1000)
                       : 0;
@@ -532,7 +577,7 @@ export default function TimelineContent({
                       : null;
 
                     return (
-                      <Card key={card.id_product} className="bg-slate-900 border border-slate-700 hover:border-emerald-500 transition-colors">
+                      <Card key={`finish-${card.id_product}-${fgIdx}`} className="bg-slate-900 border border-slate-700 hover:border-emerald-500 transition-colors">
                         <CardContent className="px-4 py-3">
                           <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
                             <div className="space-y-0.5 min-w-0">
@@ -660,7 +705,7 @@ export default function TimelineContent({
           <CardContent className="p-4 space-y-2">
             <div className="text-white font-semibold mb-2 flex items-center gap-2">
               <Users className="w-4 h-4 text-blue-400" />
-              Operator Aktif per Workstation
+              Operator Aktif 
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {points.map((ws) => (

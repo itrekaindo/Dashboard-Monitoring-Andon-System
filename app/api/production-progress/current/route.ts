@@ -8,6 +8,7 @@ import {
   getProductionEstimate,
   getProductStatusCards,
   getProductStatusSummary,
+  getProductSchedule,
 } from "@/lib/queries/production-progress";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
     // Get daysBack from query parameter, default to 7
     const daysBack = Number(request.nextUrl.searchParams.get("daysBack")) || 7;
 
-    const [data, stats, workstations, recent, durations, estimate, cards, statusSummary] = await Promise.all([
+    const [data, stats, workstations, recent, durations, estimate, cards, statusSummary, schedule] = await Promise.all([
       getRecentProgress(),
       getProductionStats(),
       getWorkstationStats(),
@@ -26,7 +27,10 @@ export async function GET(request: NextRequest) {
       getProductionEstimate(),
       getProductStatusCards(daysBack),
       getProductStatusSummary(daysBack),
+      getProductSchedule(),
     ]);
+
+    console.log('[GET /api/production-progress/current] Schedule items:', schedule?.length || 0);
 
     return NextResponse.json({
       count: data.length,
@@ -39,6 +43,7 @@ export async function GET(request: NextRequest) {
       estimate,
       cards,
       statusSummary,
+      schedule,
     });
   } catch (error) {
     console.error("[GET /api/production-progress/current]", error);

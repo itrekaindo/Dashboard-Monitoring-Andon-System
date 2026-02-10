@@ -218,9 +218,9 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
         {/* Header */}
         <div className="p-4 border-b border-gray-800/50 flex items-center justify-center">
           {isOpen ? (
-            <Image src="/assets/logo/logo.png" alt="Andon Logo" width={180} height={80} className="object-contain" />
+            <Image src="/assets/logo/logoxreka.png" alt="Andon Logo" width={200} height={60} className="object-contain" />
           ) : (
-            <Image src="/assets/logo/logo.png" alt="Andon Logo" width={50} height={50} className="object-contain" />
+            <Image src="/assets/logo/logoxreka.png" alt="Andon Logo" width={50} height={50} className="object-contain" />
           )}
         </div>
 

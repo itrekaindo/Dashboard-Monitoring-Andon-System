@@ -551,7 +551,7 @@ export async function getProductionEstimate(): Promise<ProductionEstimate | null
       INNER JOIN ideal_time it 
         ON pp.id_product = it.id_product 
         AND it.process_name = 'total_production_qc'
-      WHERE pp.workstation = 1 
+      WHERE pp.workstation IN (0, 1) 
         AND DATE(pp.start_actual) = CURDATE()
         AND pp.finish_actual IS NULL
       ORDER BY pp.start_actual DESC
@@ -575,7 +575,7 @@ WITH ws1_start AS (
     id_perproduct,
     MIN(start_actual) as ws1_start_actual
   FROM production_progress
-  WHERE workstation = 1
+  WHERE workstation IN (0, 1)
     AND DATE(start_actual) >= DATE_SUB(CURDATE(), INTERVAL ${daysBack} DAY)
   GROUP BY id_perproduct
 ),
@@ -599,11 +599,12 @@ SELECT
   it.duration_time AS total_duration,
   DATE_ADD(ws1.ws1_start_actual, INTERVAL TIME_TO_SEC(it.duration_time) SECOND) AS estimated_finish,
   CASE WHEN l.status = 'Finish Good' THEN 1 ELSE 0 END AS is_finish_good,
-  CASE 
+CASE 
+    WHEN l.status = 'Tunggu QC' THEN 1
+    WHEN l.status IN ('On Progress', 'Masuk%', 'Istirahat', 'Tunggu') THEN 0
     WHEN l.finish_actual IS NOT NULL THEN 1
-    WHEN l.status = 'Tunggu QC' AND l.status NOT IN ('Tunggu Selesai', 'Gangguan Selesai', 'On Progress') THEN 1
     ELSE 0 
-  END AS is_completed
+END AS is_completed
 FROM latest l
 LEFT JOIN ws1_start ws1 ON l.id_perproduct = ws1.id_perproduct
 LEFT JOIN ideal_time it
@@ -775,5 +776,52 @@ export async function getProductStatusSummary(daysBack: number = 7): Promise<Pro
       gangguan: 0,
       tunggu: 0,
     };
+  }
+}
+
+export async function getProductSchedule(): Promise<any[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT 
+    j.id_product, 
+    j.product_name, 
+    j.trainset, 
+    j.total_personil,
+    j.jumlah_tiapts as total,
+    j.tanggal_mulai, 
+    j.tanggal_selesai,
+    COALESCE(p.jumlah_tunggu_qc, 0) AS jumlah_tunggu_qc,
+    COALESCE(p.jumlah_finish_good, 0) AS jumlah_finish_good
+FROM 
+    jadwal as j 
+LEFT JOIN 
+    (
+        SELECT 
+            id_product, 
+            -- Hitung Tunggu QC
+            SUM(CASE WHEN status = 'Tunggu QC' THEN 1 ELSE 0 END) AS jumlah_tunggu_qc,
+            -- Hitung Finish Good
+            SUM(CASE WHEN status = 'Finish Good' THEN 1 ELSE 0 END) AS jumlah_finish_good
+        FROM production_progress
+        WHERE 
+            -- Filter: Hanya ambil progress yang start_actual-nya bulan ini
+            MONTH(start_actual) = MONTH(CURRENT_DATE()) 
+            AND YEAR(start_actual) = YEAR(CURRENT_DATE())
+        GROUP BY id_product
+    ) p 
+    ON j.id_product = p.id_product
+WHERE 
+    -- Filter: Hanya ambil jadwal yang tanggal_mulai-nya bulan ini
+    MONTH(j.tanggal_mulai) = MONTH(CURRENT_DATE()) 
+    AND YEAR(j.tanggal_mulai) = YEAR(CURRENT_DATE())
+ORDER BY 
+    j.tanggal_selesai ASC;
+    `);
+
+    const rows = extractRows(result);
+    return rows;
+  } catch (error) {
+    console.error("Failed to fetch product schedule:", error);
+    return [];
   }
 }
