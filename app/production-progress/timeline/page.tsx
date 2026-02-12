@@ -8,6 +8,8 @@ import {
   getProductionEstimate,
   getProductStatusCards,
   getProductStatusSummary,
+  getRecentOperator,
+  getAbnormalProgress,
 } from "@/lib/queries/production-progress";
 import TimelineContent from "./timeline-content";
 
@@ -32,9 +34,11 @@ export default async function TimelinePage({ searchParams }: { searchParams: Pro
   let estimate: Awaited<ReturnType<typeof getProductionEstimate>> = null;
   let cards: Awaited<ReturnType<typeof getProductStatusCards>> = [];
   let statusSummary: Awaited<ReturnType<typeof getProductStatusSummary>> | null = null;
+  let operators: Awaited<ReturnType<typeof getRecentOperator>> = [];
+  let abnormal: Awaited<ReturnType<typeof getAbnormalProgress>> = [];
 
   try {
-    [stats, workstations, recent, current, durations, estimate, cards, statusSummary] = await Promise.all([
+    [stats, workstations, recent, current, durations, estimate, cards, statusSummary, operators, abnormal] = await Promise.all([
       getProductionStats(),
       getWorkstationStats(),
       getRecentProductionProgress(50),
@@ -43,6 +47,8 @@ export default async function TimelinePage({ searchParams }: { searchParams: Pro
       getProductionEstimate(),
       getProductStatusCards(),
       getProductStatusSummary(),
+      getRecentOperator(),
+      getAbnormalProgress(),
     ]);
   } catch (error) {
     console.error("[TimelinePage] Failed to fetch initial data:", error);
@@ -65,6 +71,8 @@ export default async function TimelinePage({ searchParams }: { searchParams: Pro
         initialEstimate={estimate}
         initialCards={cards}
         initialStatusSummary={statusSummary}
+        initialOperators={operators}
+        initialAbnormal={abnormal}
         forcedStep={forcedStep}
       />
     </ModernSidebar>

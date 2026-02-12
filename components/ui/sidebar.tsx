@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, ReactNode } from 'react';
+import { useState, ReactNode, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { 
@@ -14,8 +14,10 @@ import {
   LogOut,
   HelpCircle,
   Menu,
+  BellRing,
   X
 } from 'lucide-react';
+import NotificationModal from './NotificationModal';
 
 interface SubmenuItem {
   id: string;
@@ -130,6 +132,55 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(true);
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+
+  // Fetch notifications
+  const fetchNotifications = async () => {
+    try {
+      const response = await fetch('/api/notifications/kurang-komponen', {
+        cache: 'no-store',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const newNotifications = data.notifications || [];
+        
+        setNotifications(newNotifications);
+        
+        // Jika modal tidak terbuka, set counter = actual count (bukan increment)
+        if (!isNotificationModalOpen) {
+          setUnreadNotificationCount(newNotifications.length);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+      setNotifications([]);
+    }
+  };
+
+  // Auto-fetch notifications setiap 1 menit
+  useEffect(() => {
+    fetchNotifications(); // Fetch saat component mount
+    
+    const interval = setInterval(() => {
+      fetchNotifications();
+    }, 60000); // 1 menit
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleNotificationClick = async () => {
+    if (!isNotificationModalOpen) {
+      await fetchNotifications();
+      setUnreadNotificationCount(0); // Reset badge ketika modal dibuka
+    }
+    setIsNotificationModalOpen(!isNotificationModalOpen);
+  };
+
+  const handleMarkAsRead = () => {
+    setUnreadNotificationCount(0);
+  };
 
   // Set active menu based on current pathname
   const getActiveMenu = () => {
@@ -286,13 +337,21 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition-all text-sm">
-                  <HelpCircle className="w-4 h-4" />
-                  Help
-                </button>
                 <button className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-all text-sm">
                   <LogOut className="w-4 h-4" />
                   Logout
+                </button>
+                <button 
+                  onClick={handleNotificationClick}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-all text-sm relative`}
+                >
+                  <BellRing className="w-4 h-4" />
+                  Notifikasi
+                  {unreadNotificationCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -351,6 +410,14 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
           </div>
         )}
       </main>
+
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={isNotificationModalOpen}
+        notifications={notifications}
+        onClose={() => setIsNotificationModalOpen(false)}
+        onMarkAsRead={handleMarkAsRead}
+      />
     </div>
   );
 };

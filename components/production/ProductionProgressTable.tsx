@@ -10,7 +10,7 @@ interface ProductionProgressTableProps {
   data: ProductionProgress[];
 }
 
-type SortColumn = 'id_perproduct' | 'product_name' | 'workstation' | 'operator_actual_name' | 'start_actual' | 'duration_time_actual' | 'finish_actual';
+type SortColumn = 'id_perproduct' | 'product_name' | 'workstation' | 'operator_actual_name' | 'start_actual' | 'duration_time_actual' | 'finish_actual' | 'status';
 type SortDirection = 'asc' | 'desc';
 
 interface RealisasiResult {
@@ -134,19 +134,19 @@ function getStatusColor(status?: string | null) {
   if (!status) return { bg: 'bg-gray-700/20', border: 'border-gray-600', text: 'text-gray-300' };
   
   const lower = status.toLowerCase();
-  if (lower.includes('gangguan')) {
+  if (lower.includes('gangguan') || lower.includes('kurang komponen')) {
     return { bg: 'bg-rose-900/30', border: 'border-rose-600', text: 'text-rose-300' };
   }
-  if (lower.includes('tunggu')) {
+  if (lower.includes('istirahat')) {
     return { bg: 'bg-amber-900/30', border: 'border-amber-600', text: 'text-amber-300' };
   }
-  if (lower.includes('selesai ws') || lower.includes('finish')) {
+  if (lower.includes('tunggu qc') || lower.includes('finish')) {
     return { bg: 'bg-emerald-900/30', border: 'border-emerald-600', text: 'text-emerald-300' };
   }
   if (lower.includes('not ok') || lower.includes('tidak ok')) {
     return { bg: 'bg-red-900/30', border: 'border-red-600', text: 'text-red-300' };
   }
-  if (lower.includes('masuk')) {
+  if (lower.includes('masuk') || lower.includes('on progress')) {
     return { bg: 'bg-blue-900/30', border: 'border-blue-600', text: 'text-blue-300' };
   }
   if (lower.includes('login')) {
@@ -162,11 +162,11 @@ function getStatusColor(status?: string | null) {
 function getStatusIcon(status?: string | null) {
   if (!status) return '○';
   const lower = status.toLowerCase();
-  if (lower.includes('gangguan')) return '⚠';
-  if (lower.includes('tunggu')) return '⏸';
-  if (lower.includes('selesai ws') || lower.includes('finish')) return '✓';
+  if (lower.includes('gangguan') || lower.includes('kurang komponen'))  return '⚠';
+  if (lower.includes('istirahat')) return '⏸';
+  if (lower.includes('tunggu qc') || lower.includes('finish')) return '✓';
   if (lower.includes('not ok')) return '✗';
-  if (lower.includes('masuk')) return '▶';
+  if (lower.includes('masuk') || lower.includes('on progress'))  return '▶';
   return '○';
 }
 
@@ -394,7 +394,13 @@ export default function ProductionProgressTable({ data }: ProductionProgressTabl
 
               {/* Status */}
               <th className="px-4 py-3 text-left">
-                <span className="font-semibold text-gray-200">Status</span>
+                <button
+                  onClick={() => handleSort('status')}
+                  className="flex items-center gap-2 font-semibold text-gray-200 hover:text-white transition-colors"
+                >
+                  Status
+                  <SortIcon column="status" />
+                </button>
               </th>
 
               {/* Realisasi */}

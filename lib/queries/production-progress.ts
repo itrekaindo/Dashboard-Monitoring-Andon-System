@@ -419,6 +419,10 @@ export async function getRecentProductionProgress(limit: number = 100): Promise<
       LEFT JOIN ideal_time it 
         ON pp.id_product = it.id_product 
         AND pp.workstation = it.workstation
+        AND (
+          (pp.workstation = 0 AND it.process_name = 'total_production_qc')
+          OR (pp.workstation <> 0 AND it.process_name = pp.process_name)
+        )
       ORDER BY pp.start_actual DESC
       LIMIT ${limit}
     `);
@@ -482,6 +486,27 @@ export interface ProductStatusCard {
   is_completed: number;
 }
 
+export interface OperatorStats {
+  operator_actual_rfid: number | null;
+  operator_actual_name: string | null;
+  latest_product_name: string | null;
+  latest_id_perproduct: string | null;
+  latest_start_actual: Date | string | null;
+  total_selesai_all_time: number;
+  total_selesai_hari_ini: number;
+}
+
+export interface AbnormalProgress {
+  operator_actual_rfid: number | null;
+  operator_actual_name: string | null;
+  id_perproduct: string | null;
+  product_name: string | null;
+  start_actual: Date | string | null;
+  status: string | null;
+  note_qc: string | null;
+  kategori?: string | null;
+}
+
 // Get latest active process per workstation (finish_actual is null)
 export async function getRecentProgress(): Promise<CurrentWorkstationProgress[]> {
   try {
@@ -511,6 +536,149 @@ WHERE urutan = 1;
     
     const rows = extractRows(result);
     return rows as CurrentWorkstationProgress[];
+  } catch (error) {
+    console.error("Failed to fetch production progress:", error);
+    return [];
+  }
+}
+
+
+export async function getRecentOperator(): Promise<OperatorStats[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT 
+    p.operator_actual_rfid, 
+    p.operator_actual_name,
+    -- Ambil product_name, id_perproduct, dan start_actual terbaru
+    (
+        SELECT pp.product_name
+        FROM production_progress pp
+        WHERE pp.operator_actual_rfid = p.operator_actual_rfid
+        ORDER BY pp.start_actual DESC
+        LIMIT 1
+    ) AS latest_product_name,
+    
+    (
+        SELECT pp.id_perproduct
+        FROM production_progress pp
+        WHERE pp.operator_actual_rfid = p.operator_actual_rfid
+        ORDER BY pp.start_actual DESC
+        LIMIT 1
+    ) AS latest_id_perproduct,
+    
+    (
+        SELECT pp.start_actual
+        FROM production_progress pp
+        WHERE pp.operator_actual_rfid = p.operator_actual_rfid
+        AND pp.status = 'On Progress'
+        ORDER BY pp.start_actual DESC
+        LIMIT 1
+    ) AS latest_start_actual,
+    
+    -- 1. Total 'Tunggu QC' SEUMUR HIDUP
+    (
+        SELECT COUNT(*) 
+        FROM production_progress all_time 
+        WHERE all_time.operator_actual_rfid = p.operator_actual_rfid 
+          AND all_time.status = 'Tunggu QC'
+    ) AS total_selesai_all_time,
+    
+    -- 2. Total 'Tunggu QC' HARI INI
+    COUNT(CASE WHEN p.status = 'Tunggu QC' THEN 1 END) AS total_selesai_hari_ini
+
+FROM 
+    production_progress p
+WHERE 
+    DATE(p.start_actual) = CURRENT_DATE()
+GROUP BY 
+    p.operator_actual_rfid, 
+    p.operator_actual_name
+ORDER BY 
+    total_selesai_all_time DESC;
+    `);
+    
+    const rows = extractRows(result);
+    return rows as OperatorStats[];
+  } catch (error) {
+    console.error("Failed to fetch production progress:", error);
+    return [];
+  }
+}
+
+export async function getAbnormalProgress(daysBack: number = 7): Promise<AbnormalProgress[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT
+  pp.operator_actual_rfid,
+  pp.operator_actual_name,
+  pp.id_perproduct,
+  pp.product_name,
+  pp.start_actual,
+
+  /* ================= STATUS CUSTOM ================= */
+  CASE
+    WHEN
+      pp.status = 'On Progress'
+      AND pp.start_actual <= NOW() - INTERVAL 3 DAY
+      AND NOT EXISTS (
+          SELECT 1
+          FROM production_progress qc
+          WHERE qc.id_perproduct = pp.id_perproduct
+            AND qc.status = 'Tunggu QC'
+      )
+    THEN 'On Progress > 3 Hari'
+    ELSE pp.status
+  END AS status,
+
+  pp.note_qc,
+
+  /* ================= KATEGORI ================= */
+  CASE
+    WHEN
+      pp.status = 'On Progress'
+      AND pp.start_actual <= NOW() - INTERVAL 3 DAY
+      AND NOT EXISTS (
+          SELECT 1
+          FROM production_progress qc
+          WHERE qc.id_perproduct = pp.id_perproduct
+            AND qc.status = 'Tunggu QC'
+      )
+    THEN 'On Progress > 3 hari'
+
+    WHEN pp.status IN ('Gangguan', 'Not OK', 'Kurang Komponen')
+    THEN 'Laporan Abnormal'
+  END AS kategori
+
+FROM production_progress pp
+
+WHERE
+(
+    /* QUERY 1 — ON PROGRESS > 3 HARI */
+    pp.status = 'On Progress'
+    AND pp.start_actual <= NOW() - INTERVAL 3 DAY
+    AND pp.start_actual = (
+        SELECT MAX(sub.start_actual)
+        FROM production_progress sub
+        WHERE sub.id_perproduct = pp.id_perproduct
+    )
+    AND NOT EXISTS (
+        SELECT 1
+        FROM production_progress qc
+        WHERE qc.id_perproduct = pp.id_perproduct
+          AND qc.status = 'Tunggu QC'
+    )
+)
+OR
+(
+    /* QUERY 2 — ABNORMAL PERIODE */
+    pp.status IN ('Gangguan', 'Not OK', 'Kurang Komponen')
+    AND pp.start_actual >= NOW() - INTERVAL ${daysBack} DAY
+);
+
+    `);
+    
+    const rows = extractRows(result);
+    return rows as AbnormalProgress[];
   } catch (error) {
     console.error("Failed to fetch production progress:", error);
     return [];
@@ -703,46 +871,84 @@ export async function getProductStatusSummary(daysBack: number = 7): Promise<Pro
     startDate.setDate(startDate.getDate() - daysBack);
     
     const result = await db.execute(sql`
-      WITH LatestStatus AS (
-        SELECT 
-          id_perproduct,
-          status,
-          ROW_NUMBER() OVER (PARTITION BY id_perproduct ORDER BY start_actual DESC) AS rn
-        FROM production_progress
-        WHERE start_actual >= ${startDate}
-      )
-      SELECT
-        /* Selesai Produksi */
-        COUNT(DISTINCT CASE
-            WHEN status LIKE 'Selesai WS%' THEN id_perproduct
-        END) AS selesai_produksi,
+/* ===================== CTE LATEST STATUS ===================== */
+WITH LatestStatus AS (
+    SELECT
+        pp.id_perproduct,
+        pp.status,
+        pp.start_actual,
 
-        /* On Progress */
-        COUNT(DISTINCT CASE
-            WHEN status LIKE 'Masuk%' THEN id_perproduct
-        END) AS on_progress,
+        ROW_NUMBER() OVER (
+            PARTITION BY pp.id_perproduct
+            ORDER BY pp.start_actual DESC
+        ) AS rn
 
-        /* Finish Good */
-        COUNT(DISTINCT CASE
-            WHEN status = 'Finish Good' THEN id_perproduct
-        END) AS finish_good,
+    FROM production_progress pp
+),
 
-        /* Not OK */
-        COUNT(DISTINCT CASE
-            WHEN status = 'Not OK' THEN id_perproduct
-        END) AS not_ok,
+/* ===================== HISTORI PERIODE ===================== */
+HistoriPeriode AS (
+    SELECT *
+    FROM production_progress
+    WHERE start_actual >= ${startDate}
+)
 
-        /* Gangguan (hitung semua kejadian) */
-        COUNT(CASE
-            WHEN status LIKE '%Gangguan%' THEN 1
-        END) AS gangguan,
+/* ===================== AGREGASI ===================== */
+SELECT
 
-        /* Tunggu (hitung semua kejadian) */
-        COUNT(CASE
-            WHEN status LIKE '%Tunggu%' THEN 1
-        END) AS tunggu
-      FROM LatestStatus
-      WHERE rn = 1
+    /* ================= Selesai Produksi ================= */
+    COUNT(DISTINCT CASE
+        WHEN
+            ls.status LIKE 'Selesai WS%'
+            OR ls.status IN ('Tunggu QC', 'Belum QC')
+        THEN ls.id_perproduct
+    END) AS selesai_produksi,
+
+    /* ================= On Progress ================= */
+    COUNT(DISTINCT CASE
+        WHEN
+            ls.status LIKE 'Masuk%'
+            OR ls.status = 'On Progress'
+        THEN ls.id_perproduct
+    END) AS on_progress,
+
+    /* ================= Finish Good ================= */
+    COUNT(DISTINCT CASE
+        WHEN ls.status = 'Finish Good'
+        THEN ls.id_perproduct
+    END) AS finish_good,
+
+    /* ================= Not OK ================= */
+    COUNT(DISTINCT CASE
+        WHEN ls.status = 'Not OK'
+        THEN ls.id_perproduct
+    END) AS not_ok,
+
+    /* ================= Gangguan (SEMUA KEJADIAN) ================= */
+    COUNT(CASE
+        WHEN
+            hp.status LIKE '%Gangguan%'
+            OR TRIM(hp.status) = 'Kurang Komponen'
+        THEN 1
+    END) AS gangguan,
+
+    /* ================= Tunggu (SEMUA KEJADIAN) ================= */
+    COUNT(CASE
+        WHEN hp.status IN ('Tunggu', 'Istirahat')
+        THEN 1
+    END) AS tunggu
+
+FROM LatestStatus ls
+
+/* Join histori periode untuk hitung kejadian */
+LEFT JOIN HistoriPeriode hp
+    ON ls.id_perproduct = hp.id_perproduct
+
+/* Latest only untuk status produksi */
+WHERE ls.rn = 1
+
+/* Filter periode untuk latest produksi juga */
+AND ls.start_actual >= ${startDate};
     `);
     
     const rows = extractRows(result);
