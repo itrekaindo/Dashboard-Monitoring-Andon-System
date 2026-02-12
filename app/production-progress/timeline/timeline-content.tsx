@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Activity, MapPin, Users, ChevronRight, Clock, CheckCircle, XCircle, AlertCircle, PauseCircle } from "lucide-react";
 import Elapsed from "@/components/ui/elapsed";
 import ProductionProgressTable from "@/components/production/ProductionProgressTable";
-import type { ProductionStats, WorkstationStats, ProductionProgress, CurrentWorkstationProgress, WorkstationDuration, ProductionEstimate, ProductStatusCard, ProductStatusSummary } from "@/lib/queries/production-progress";
+import type { ProductionStats, WorkstationStats, ProductionProgress, CurrentWorkstationProgress, WorkstationDuration, ProductionEstimate, ProductStatusCard, ProductStatusSummary, OperatorStats, AbnormalProgress } from "@/lib/queries/production-progress";
 
 interface TimelineContentProps {
   initialStats: ProductionStats;
@@ -17,6 +17,8 @@ interface TimelineContentProps {
   initialEstimate: ProductionEstimate | null;
   initialCards: ProductStatusCard[];
   initialStatusSummary?: ProductStatusSummary | null;
+  initialOperators: OperatorStats[];
+  initialAbnormal?: AbnormalProgress[];
   forcedStep?: number;
 }
 
@@ -130,6 +132,8 @@ export default function TimelineContent({
   initialEstimate,
   initialCards,
   initialStatusSummary,
+  initialOperators,
+  initialAbnormal,
   forcedStep,
 }: TimelineContentProps) {
   const [stats, setStats] = useState<ProductionStats>(initialStats);
@@ -140,6 +144,8 @@ export default function TimelineContent({
   const [estimate, setEstimate] = useState<ProductionEstimate | null>(initialEstimate);
   const [cards, setCards] = useState<ProductStatusCard[]>(initialCards);
   const [statusSummary, setStatusSummary] = useState<ProductStatusSummary | null>(initialStatusSummary || null);
+  const [operators, setOperators] = useState<OperatorStats[]>(initialOperators);
+  const [abnormal, setAbnormal] = useState<AbnormalProgress[]>(initialAbnormal || []);
   const [schedule, setSchedule] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [daysBack, setDaysBack] = useState(7);
@@ -164,6 +170,8 @@ export default function TimelineContent({
       setCards(data.cards || []);
       setSchedule(data.schedule || []);
       setStatusSummary(data.statusSummary || null);
+      setOperators(data.operators || []);
+      setAbnormal(data.abnormal || []);
     } catch (error) {
       console.error('Failed to refresh data:', error);
     } finally {
@@ -174,11 +182,11 @@ export default function TimelineContent({
   // Auto-refresh every 1 minute
   useEffect(() => {
     let isMounted = true;
-    fetchData();
+    fetchData(daysBack);
     
     const interval = setInterval(() => {
       if (isMounted) {
-        fetchData();
+        fetchData(daysBack);
       }
     }, 60000);
     
@@ -186,7 +194,7 @@ export default function TimelineContent({
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [daysBack]);
 
   const currentStep = pickCurrentStep(recent, workstations, forcedStep);
 
@@ -417,12 +425,12 @@ export default function TimelineContent({
 
                     return (
                       <Card key={`todo-${product.id_product}-${idx}`} className="bg-slate-900 border border-slate-700 hover:border-gray-500 transition-colors">
-                        <CardContent className="px-4 py-3">
-                          <div className="grid grid-cols-[1fr_auto] gap-4 items-start">
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="text-base font-semibold text-white truncate">{product.product_name || "-"}</div>
-                              <div className="text-sm text-gray-300 truncate">{product.id_product || "-"}</div>
-                              <div className="text-sm text-gray-400 truncate">Personil: {product.total_personil || "-"}</div>
+                        <CardContent className="px-3 py-1">
+                          <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                            <div className="space-y-0.5 min-w-0 leading-tight">
+                              <div className="text-sm font-semibold text-white truncate">{product.product_name || "-"}</div>
+                              <div className="text-xs text-gray-300 truncate">{product.id_product || "-"}</div>
+                              <div className="text-xs text-gray-400 truncate">Personil: {product.total_personil || "-"}</div>
                               <Badge className={`border-0 text-xs font-semibold ${
                                 isOverdue 
                                   ? 'bg-red-600 text-white' 
@@ -431,11 +439,11 @@ export default function TimelineContent({
                                 {isOverdue ? 'Terlambat / Tidak Tercatat' : 'To Do'}
                               </Badge>
                             </div>
-                            <div className="flex flex-col gap-1 text-right shrink-0">
-                              <div className="text-sm font-semibold text-white whitespace-nowrap">
+                            <div className="flex flex-col gap-0 text-right shrink-0 leading-tight">
+                              <div className="text-xs font-semibold text-white whitespace-nowrap">
                                 {jumlahTungguQc} / {total}
                               </div>
-                              <div className="text-xs text-gray-300 whitespace-nowrap mt-1">
+                              <div className="text-xs text-gray-300 whitespace-nowrap mt-0.5">
                                 <span className="text-gray-400">Mulai:</span> {product.tanggal_mulai ? new Date(product.tanggal_mulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : "-"}
                               </div>
                               <div className="text-xs text-gray-300 whitespace-nowrap">
@@ -477,23 +485,23 @@ export default function TimelineContent({
 
                     return (
                       <Card key={`progress-${card.id_product}-${idx}`} className="bg-slate-900 border border-slate-700 hover:border-amber-500 transition-colors">
-                        <CardContent className="px-4 py-3">
-                          <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="text-base font-semibold text-white truncate">{card.product_name || "-"}</div>
-                              <div className="text-sm text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
-                              <div className="text-sm text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
+                        <CardContent className="px-3 py-1">
+                          <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                            <div className="space-y-0.5 min-w-0 leading-tight">
+                              <div className="text-sm font-semibold text-white truncate">{card.product_name || "-"}</div>
+                              <div className="text-xs text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
+                              <div className="text-xs text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
                               {isWaiting && (
                                 <Badge className={`${statusColor.bg} ${statusColor.border} ${statusColor.text} border text-xs font-semibold`}>
                                   ⏸ {card.status}
                                 </Badge>
                               )}
                             </div>
-                            <div className="flex flex-col gap-0 text-right shrink-0">
+                            <div className="flex flex-col gap-0 text-right shrink-0 leading-tight">
                               <div className="text-xs text-gray-400">Estimasi</div>
-                              <div className="text-sm text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
-                              <div className="text-xs text-gray-400 mt-1">Target</div>
-                              <div className="text-sm text-gray-300">{formatEst(card.total_duration)}</div>
+                              <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
+                              <div className="text-xs text-gray-400 mt-0.5">Target</div>
+                              <div className="text-xs text-gray-300">{formatEst(card.total_duration)}</div>
                             </div>
                           </div>
                         </CardContent>
@@ -511,7 +519,7 @@ export default function TimelineContent({
                   QC Process
                 </h3>
                 <div className="text-xs text-gray-200 text-center mt-1">
-                  {cards.filter(card => card.is_completed === 1 || card.status !== 'Finish Good').length} produk
+                  {cards.filter(card =>  card.status == 'Tunggu QC').length} produk
                 </div>
               </div>
               <div className="space-y-3">
@@ -527,24 +535,24 @@ export default function TimelineContent({
 
                     return (
                       <Card key={`qc-${card.id_product}-${qcIdx}`} className="bg-slate-900 border border-slate-700 hover:border-blue-500 transition-colors">
-                        <CardContent className="px-4 py-3">
-                          <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="text-base font-semibold text-white truncate">{card.product_name || "-"}</div>
-                              <div className="text-sm text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
-                              <div className="text-sm text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
+                        <CardContent className="px-3 py-1">
+                          <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                            <div className="space-y-0.5 min-w-0 leading-tight">
+                              <div className="text-sm font-semibold text-white truncate">{card.product_name || "-"}</div>
+                              <div className="text-xs text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
+                              <div className="text-xs text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
                               <Badge className="bg-blue-600 text-white border-0 text-xs">Belum QC</Badge>
                               {overtimeLabel && (
                                 <div className="text-sm font-semibold text-rose-400">{overtimeLabel}</div>
                               )}
                             </div>
-                            <div className="flex flex-col gap-0 text-right shrink-0">
+                            <div className="flex flex-col gap-0 text-right shrink-0 leading-tight">
                               <div className="text-xs text-gray-400">Estimasi</div>
-                              <div className="text-sm text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
-                              <div className="text-xs text-gray-400 mt-1">Selesai</div>
-                              <div className="text-sm text-gray-300 whitespace-nowrap">{formatDateTime(card.finish_actual)}</div>
-                              <div className="text-xs text-gray-400 mt-1">Target</div>
-                              <div className="text-sm text-gray-300">{formatEst(card.total_duration)}</div>
+                              <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
+                              <div className="text-xs text-gray-400 mt-0.5">Selesai</div>
+                              <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.finish_actual)}</div>
+                              <div className="text-xs text-gray-400 mt-0.5">Target</div>
+                              <div className="text-xs text-gray-300">{formatEst(card.total_duration)}</div>
                             </div>
                           </div>
                         </CardContent>
@@ -578,24 +586,24 @@ export default function TimelineContent({
 
                     return (
                       <Card key={`finish-${card.id_product}-${fgIdx}`} className="bg-slate-900 border border-slate-700 hover:border-emerald-500 transition-colors">
-                        <CardContent className="px-4 py-3">
-                          <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="text-base font-semibold text-white truncate">{card.product_name || "-"}</div>
-                              <div className="text-sm text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
-                              <div className="text-sm text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
+                       <CardContent className="px-3 py-1">
+                          <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                          <div className="space-y-0.5 min-w-0 leading-tight">
+                              <div className="text-sm font-semibold text-white truncate">{card.product_name || "-"}</div>
+                              <div className="text-xs text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
+                              <div className="text-xs text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
                               <Badge className="bg-emerald-600 text-white border-0 text-xs">Finish Good</Badge>
                               {overtimeLabel && (
                                 <div className="text-sm font-semibold text-rose-400">{overtimeLabel}</div>
                               )}
                             </div>
-                            <div className="flex flex-col gap-0 text-right shrink-0">
+                            <div className="flex flex-col gap-0 text-right shrink-0 leading-tight">
                               <div className="text-xs text-gray-400">Estimasi</div>
-                              <div className="text-sm text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
-                              <div className="text-xs text-gray-400 mt-1">Selesai</div>
-                              <div className="text-sm text-gray-300 whitespace-nowrap">{formatDateTime(card.finish_actual)}</div>
-                              <div className="text-xs text-gray-400 mt-1">Target</div>
-                              <div className="text-sm text-gray-300">{formatEst(card.total_duration)}</div>
+                              <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
+                              <div className="text-xs text-gray-400 mt-0.5">Selesai</div>
+                              <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.finish_actual)}</div>
+                              <div className="text-xs text-gray-400 mt-0.5">Target</div>
+                              <div className="text-xs text-gray-300">{formatEst(card.total_duration)}</div>
                             </div>
                           </div>
                         </CardContent>
@@ -607,121 +615,259 @@ export default function TimelineContent({
           </div>
         </div>
 
-        {/* Ringkasan Status */}
-        {statusSummary ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {/* Selesai Produksi */}
-            <Card className="bg-emerald-900/40 border border-emerald-700/60 hover:border-emerald-600 transition-colors">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs text-gray-300 uppercase tracking-wide">Selesai Produksi</div>
-                    <div className="text-2xl font-bold text-emerald-400">{statusSummary.selesai_produksi}</div>
-                    <div className="text-xs text-gray-400 mt-1">Produk</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+{/* Daftar Operator Aktif - Detailed Cards */}
+<Card className="bg-gray-800/50 border border-gray-700/60">
+  <CardContent className="p-4 space-y-2">
 
-            {/* On Progress */}
-            <Card className="bg-amber-900/40 border border-amber-700/60 hover:border-amber-600 transition-colors">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <Activity className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs text-gray-300 uppercase tracking-wide">On Progress</div>
-                    <div className="text-2xl font-bold text-amber-400">{statusSummary.on_progress}</div>
-                    <div className="text-xs text-gray-400 mt-1">Produk</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+    {/* Title */}
+    <div className="text-white font-semibold mb-4 flex items-center gap-2">
+      <Users className="w-4 h-4 text-blue-400" />
+      Operator Aktif Hari Ini
+    </div>
 
-            {/* Finish Good */}
-            <Card className="bg-emerald-900/40 border border-emerald-700/60 hover:border-emerald-600 transition-colors">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs text-gray-300 uppercase tracking-wide">Finish Good</div>
-                    <div className="text-2xl font-bold text-emerald-400">{statusSummary.finish_good}</div>
-                    <div className="text-xs text-gray-400 mt-1">Produk</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+    {/* Grid Operator */}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {operators.length > 0 ? (
+        operators.map((op) => (
+          <div
+            key={op.operator_actual_rfid}
+            className="p-4 rounded-lg bg-gray-900/60"
+          >
 
-            {/* Not OK */}
-            <Card className="bg-rose-900/40 border border-rose-700/60 hover:border-rose-600 transition-colors">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <XCircle className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs text-gray-300 uppercase tracking-wide">Not OK</div>
-                    <div className="text-2xl font-bold text-rose-400">{statusSummary.not_ok}</div>
-                    <div className="text-xs text-gray-400 mt-1">Produk</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* ================= HEADER ================= */}
+            <div className="flex items-start justify-between">
 
-            {/* Gangguan */}
-            <Card className="bg-rose-900/40 border border-rose-700/60 hover:border-rose-600 transition-colors">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs text-gray-300 uppercase tracking-wide">Gangguan</div>
-                    <div className="text-2xl font-bold text-rose-400">{statusSummary.gangguan}</div>
-                    <div className="text-xs text-gray-400 mt-1">Kejadian</div>
-                  </div>
+              {/* Nama Operator */}
+              <div className="flex-1 min-w-0">
+                <div className="text-white font-semibold text-sm truncate leading-tight">
+                  {op.operator_actual_name || "-"}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            {/* Tunggu */}
-            <Card className="bg-amber-900/40 border border-amber-700/60 hover:border-amber-600 transition-colors">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <PauseCircle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs text-gray-300 uppercase tracking-wide">Tunggu</div>
-                    <div className="text-2xl font-bold text-amber-400">{statusSummary.tunggu}</div>
-                    <div className="text-xs text-gray-400 mt-1">Kejadian</div>
-                  </div>
+              {/* Total Selesai */}
+              <div className="text-right ml-2 shrink-0">
+                <div className="text-xs text-gray-400 leading-none">Total Selesai</div>
+              </div>
+
+            </div>
+
+            {/* ================= PRODUCT INFO ================= */}
+            <div className="flex items-end justify-between mt-0">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-white truncate leading-tight">
+                  {op.latest_product_name || "-"}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="text-3xl font-bold text-blue-400 leading-none ml-2 shrink-0">
+                {op.total_selesai_all_time ?? 0}
+              </div>
+            </div>
+
+            <div className="text-xs text-gray-400 truncate leading-tight">
+              {op.latest_id_perproduct || "-"}
+            </div>
+
+            {/* ================= DURATION ================= */}
+            <div className="text-xs mt-1">
+              {op.latest_start_actual ? (
+                <Elapsed
+                  since={op.latest_start_actual}
+                  className="text-emerald-400 font-semibold"
+                />
+              ) : (
+                <span className="text-gray-500">-</span>
+              )}
+            </div>
+
           </div>
-        ) : (
-          <div className="p-4 bg-gray-900/40 border border-gray-700/60 rounded-lg">
-            <p className="text-gray-400 text-center">Loading status summary...</p>
-          </div>
-        )}
+        ))
+      ) : (
+        <div className="col-span-full text-center py-8">
+          <p className="text-gray-500 text-sm">
+            Tidak ada data operator untuk hari ini
+          </p>
+        </div>
+      )}
+    </div>
 
-        {/* Daftar operator aktif per WS */}
+  </CardContent>
+</Card>
+
+{/* Ringkasan Status */}
+{statusSummary ? (
+  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+    {/* Selesai Produksi */}
+    <Card className="bg-emerald-900/40 border border-emerald-700/60 hover:border-emerald-600 transition-colors">
+      <CardContent className="py-2 px-4">
+        <div className="flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+          <div className="min-w-0">
+            <div className="text-xs text-gray-300 uppercase tracking-wide leading-tight">Selesai Produksi</div>
+            <div className="text-2xl font-bold text-emerald-400 leading-tight">{statusSummary.selesai_produksi}</div>
+            <div className="text-xs text-gray-400 mt-0.5">Produk</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* On Progress */}
+    <Card className="bg-amber-900/40 border border-amber-700/60 hover:border-amber-600 transition-colors">
+      <CardContent className="py-2 px-4">
+        <div className="flex items-center gap-3">
+          <Activity className="w-5 h-5 text-amber-400 shrink-0" />
+          <div className="min-w-0">
+            <div className="text-xs text-gray-300 uppercase tracking-wide leading-tight">On Progress</div>
+            <div className="text-2xl font-bold text-amber-400 leading-tight">{statusSummary.on_progress}</div>
+            <div className="text-xs text-gray-400 mt-0.5">Produk</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* Finish Good */}
+    <Card className="bg-emerald-900/40 border border-emerald-700/60 hover:border-emerald-600 transition-colors">
+      <CardContent className="py-2 px-4">
+        <div className="flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+          <div className="min-w-0">
+            <div className="text-xs text-gray-300 uppercase tracking-wide leading-tight">Finish Good</div>
+            <div className="text-2xl font-bold text-emerald-400 leading-tight">{statusSummary.finish_good}</div>
+            <div className="text-xs text-gray-400 mt-0.5">Produk</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* Not OK */}
+    <Card className="bg-rose-900/40 border border-rose-700/60 hover:border-rose-600 transition-colors">
+      <CardContent className="py-2 px-4">
+        <div className="flex items-center gap-3">
+          <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
+          <div className="min-w-0">
+            <div className="text-xs text-gray-300 uppercase tracking-wide leading-tight">Not OK</div>
+            <div className="text-2xl font-bold text-rose-400 leading-tight">{statusSummary.not_ok}</div>
+            <div className="text-xs text-gray-400 mt-0.5">Produk</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* Kurang Komponen */}
+    <Card className="bg-rose-900/40 border border-rose-700/60 hover:border-rose-600 transition-colors">
+      <CardContent className="py-2 px-4">
+        <div className="flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+          <div className="min-w-0">
+            <div className="text-xs text-gray-300 uppercase tracking-wide leading-tight">Kurang Komponen</div>
+            <div className="text-2xl font-bold text-rose-400 leading-tight">{statusSummary.gangguan}</div>
+            <div className="text-xs text-gray-400 mt-0.5">Kejadian</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* Istirahat */}
+    <Card className="bg-amber-900/40 border border-amber-700/60 hover:border-amber-600 transition-colors">
+      <CardContent className="py-2 px-4">
+        <div className="flex items-center gap-3">
+          <PauseCircle className="w-5 h-5 text-amber-400 shrink-0" />
+          <div className="min-w-0">
+            <div className="text-xs text-gray-300 uppercase tracking-wide leading-tight">Istirahat</div>
+            <div className="text-2xl font-bold text-amber-400 leading-tight">{statusSummary.tunggu}</div>
+            <div className="text-xs text-gray-400 mt-0.5">Kejadian</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+) : (
+  <div className="p-4 bg-gray-900/40 border border-gray-700/60 rounded-lg">
+    <p className="text-gray-400 text-center">Loading status summary...</p>
+  </div>
+)}
+
+
+        {/* Abnormal Progress Card */}
         <Card className="bg-gray-800/50 border border-gray-700/60">
           <CardContent className="p-4 space-y-2">
-            <div className="text-white font-semibold mb-2 flex items-center gap-2">
-              <Users className="w-4 h-4 text-blue-400" />
-              Operator Aktif 
+            <div className="text-white font-semibold mb-4 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-400" />
+              Abnormal Progress
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {points.map((ws) => (
-                <div key={ws.workstation} className="p-3 rounded-lg bg-gray-900/60 border border-gray-700/60">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-gray-300 text-sm">WS {ws.workstation}</span>
-                    <Badge variant="outline" className="text-gray-200 border-gray-600">
-                      {ws.total_processes ?? 0} proses
-                    </Badge>
-                  </div>
-                  <div className="text-white text-sm font-semibold">{ws.active_operator || "-"}</div>
-                  <div className="text-[11px] text-gray-400 mt-1">
-                    Rata durasi: {formatDurationSec(ws.avg_duration_sec)}
-                  </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {abnormal && abnormal.length > 0 ? (
+                abnormal.map((item) => {
+                  const kategoriColor = item.kategori?.includes('Laporan Abnormal') || item.status?.includes('Kurang Komponen')
+                    ? 'border-rose-600 bg-rose-900/20' 
+                    : 'border-amber-600 bg-amber-900/20';
+                  
+                  return (
+                    <div
+                      key={`${item.operator_actual_rfid}-${item.product_name}`}
+                      className={`p-4 rounded-lg border ${kategoriColor}`}
+                    >
+                      {/* Header - Operator & Status Badge */}
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-white font-semibold text-sm truncate">
+                            {item.operator_actual_name || "-"}
+                          </div>
+                        </div>
+                        <Badge 
+                          className={`ml-2 shrink-0 text-xs ${
+                            item.kategori?.includes('Laporan Abnormal') || item.status?.includes('Kurang Komponen')
+                              ? 'bg-rose-600 text-white' 
+                              : 'bg-amber-600 text-white'
+                          }`}
+                        >
+                          {item.status || "-"}
+                        </Badge>
+                      </div>
+
+                      {/* Product Info */}
+                      <div className="mb-2">
+                        <div className="text-sm font-semibold text-white truncate">
+                          {item.product_name || "-"}
+                        </div>
+                        <div className="text-xs text-gray-400 truncate">
+                          {item.id_perproduct || "-"}
+                        </div>
+                      </div>
+
+                      {/* Start Time */}
+                      <div className="text-xs text-gray-300 mb-2">
+                        {item.start_actual ? (
+                          <>
+                            Start: {new Date(item.start_actual).toLocaleDateString('id-ID', { 
+                              weekday: 'long',
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric'
+                            })} {new Date(item.start_actual).toLocaleTimeString('id-ID', { 
+                              hour: '2-digit', 
+                              minute: '2-digit'
+                            })}
+                          </>
+                        ) : (
+                          <span className="text-gray-500">-</span>
+                        )}
+                      </div>
+
+                      {/* Note */}
+                      {item.note_qc && (
+                        <div className="text-xs text-gray-300 bg-gray-700/50 p-2 rounded">
+                          Note: {item.note_qc}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="col-span-full text-center py-8">
+                  <p className="text-gray-500 text-sm">Tidak ada abnormal progress</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
