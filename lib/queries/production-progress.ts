@@ -645,7 +645,7 @@ SELECT
       )
     THEN 'On Progress > 3 hari'
 
-    WHEN pp.status IN ('Gangguan', 'Not OK', 'Kurang Komponen')
+WHEN pp.status IN ('Gangguan', 'Not OK', 'Kurang Komponen') OR (TRIM(note_qc) IS NOT NULL AND TRIM(note_qc) != '')
     THEN 'Laporan Abnormal'
   END AS kategori
 
@@ -673,8 +673,11 @@ OR
     /* QUERY 2 — ABNORMAL PERIODE */
     pp.status IN ('Gangguan', 'Not OK', 'Kurang Komponen')
     AND pp.start_actual >= NOW() - INTERVAL ${daysBack} DAY
+)
+    OR (
+    TRIM(note_qc) IS NOT NULL 
+    AND TRIM(note_qc) != ''
 );
-
     `);
     
     const rows = extractRows(result);
@@ -769,6 +772,7 @@ SELECT
   CASE WHEN l.status = 'Finish Good' THEN 1 ELSE 0 END AS is_finish_good,
 CASE 
     WHEN l.status = 'Tunggu QC' THEN 1
+    WHEN l.status = 'Finish Good' THEN 1
     WHEN l.status IN ('On Progress', 'Masuk%', 'Istirahat', 'Tunggu') THEN 0
     WHEN l.finish_actual IS NOT NULL THEN 1
     ELSE 0 

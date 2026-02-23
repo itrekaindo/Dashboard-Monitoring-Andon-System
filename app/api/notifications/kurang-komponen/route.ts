@@ -16,7 +16,7 @@ export async function GET() {
         pp.note_qc
       FROM production_progress pp
       WHERE
-        pp.status = 'Kurang Komponen'
+        pp.status IN ('Kurang Komponen', 'Gangguan')
         AND DATE(pp.start_actual) = CURDATE()
       ORDER BY pp.start_actual DESC
     `);
