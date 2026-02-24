@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { JadwalRow, StatisticRow } from "@/lib/queries/jadwal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Filter, Search, Plus, Save, X, Pencil, Trash2, Layers, Eye, EyeOff, Target, Clock, CheckCircle2, AlertTriangle, Activity, Hourglass, AlertCircle, CheckCheck } from "lucide-react";
+import { Calendar, Filter, Search, Plus, Save, X, Pencil, Trash2, Layers, Eye, EyeOff, Target, Clock, CheckCircle2, AlertTriangle, Activity, Hourglass, AlertCircle, CheckCheck, Package, BookCheck } from "lucide-react";
 
 type JadwalKey = {
   id_product: string;
@@ -641,7 +641,7 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
           <Calendar className="w-8 h-8 text-blue-400" />
           Jadwal Produksi
         </h1>
-        <p className="text-gray-400">Sumber data: tabel jadwal (ppc_reka)</p>
+        <p className="text-gray-400">Dikelola oleh Tim Perencanaan Produksi</p>
       </div>
 
 
@@ -773,14 +773,25 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
 
       {/* Gantt Chart */}
       {filteredRows.length > 0 && (() => {
-        const { minDate, maxDate, totalDays } = getDateRange(filteredRows);
+        let { minDate, maxDate, totalDays } = getDateRange(filteredRows);
+        
+        // Override date range when month filter is active
+        if (monthYearFilter !== "all") {
+          const [year, month] = monthYearFilter.split('-').map(Number);
+          minDate = new Date(year, month - 1, 1);
+          minDate.setHours(0, 0, 0, 0);
+          maxDate = new Date(year, month, 0); // Last day of the month
+          maxDate.setHours(0, 0, 0, 0);
+          totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        }
+        
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const rangeStart = new Date(minDate);
         rangeStart.setHours(0, 0, 0, 0);
         const todayIndex = Math.floor((today.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24));
-        const isTodayInRange = todayIndex >= 0 && todayIndex < totalDays;
+        const isTodayInRange = todayIndex >= 0 && todayIndex < totalDays && today >= minDate && today <= maxDate;
         
         // Generate months for header
         const months: { month: number; year: number; days: number; offset: number }[] = [];
@@ -1073,8 +1084,8 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
             {/* Statistics Dashboard - All in One Row */}
       {statistics && (
         <Card className="bg-gray-800/50 border border-gray-700/50">
-          <CardContent className="p-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4">
+          <CardContent className="p-6 overflow-x-auto">
+            <div className="grid grid-cols-8 gap-4 min-w-max">
               {/* Target Total TS */}
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-gray-500/20 flex items-center justify-center flex-shrink-0">
@@ -1120,6 +1131,18 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                   <p className="text-xs text-gray-400 truncate">Tepat Waktu</p>
                   <p className="text-xl font-bold text-emerald-400">{statistics.total_tepat_waktu_item || 0} <span className="text-sm font-normal text-emerald-400/60">Item</span></p>
                   <p className="text-xs text-emerald-400/70">{Number(statistics.persen_tepat_waktu_item || 0).toFixed(0)}%</p>
+                </div>
+              </div>
+
+              {/* Finish Good */}
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                  <Package className="w-6 h-6 text-emerald-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-400 truncate">Finish Good</p>
+                  <p className="text-xl font-bold text-emerald-400">{statistics.total_finish_good || 0} <span className="text-sm font-normal text-emerald-400/60">Item</span></p>
+                  <p className="text-xs text-emerald-400/70">{Number(statistics.persen_finish_good || 0).toFixed(0)}%</p>
                 </div>
               </div>
 

@@ -410,18 +410,33 @@ export default function TimelineContent({
               <div className="space-y-3">
                 {schedule.length > 0 ? (
                   schedule.map((product: any, idx: number) => {
-                    const total = product.total || 0;
-                    const jumlahTungguQc = product.jumlah_tunggu_qc || 0;
-                    const totalFinishedQc = product.jumlah_finish_good || 0;
-                    // Produk dianggap selesai jika sudah Finish Good
-                    const isComplete = totalFinishedQc === total && total > 0;
+                    const total = Number(product.total) || 0;
+                    const jumlahTungguQc = Number(product.jumlah_tunggu_qc) || 0;
+                    const totalFinishedQc = Number(product.jumlah_finish_good) || 0;
                     const tanggalSelesai = product.tanggal_selesai ? new Date(product.tanggal_selesai) : null;
                     const today = new Date();
-                    const isOverdue = tanggalSelesai && today > tanggalSelesai && jumlahTungguQc < total;
                     const presentase = total > 0 ? Math.round((jumlahTungguQc / total) * 100) : 0;
                     
-                    // Jangan tampilkan jika sudah selesai (total_finished_qc = total)
-                    if (isComplete) return null;
+                    // Tentukan status berdasarkan kondisi
+                    let status = 'To Do';
+                    let statusBg = 'bg-gray-600';
+                    
+                    if (jumlahTungguQc >= total && total > 0) {
+                      // Selesai: tunggu_qc >= jumlah_per_ts (gunakan >= untuk handle edge case)
+                      status = 'Selesai';
+                      statusBg = 'bg-emerald-600';
+                    } else if (jumlahTungguQc < total) {
+                      if (tanggalSelesai && today > tanggalSelesai) {
+                        // Terlambat: tunggu_qc < jumlah_per_ts AND today > jadwal_selesai
+                        status = 'Terlambat / Tidak Tercatat';
+                        statusBg = 'bg-red-600';
+                      } else {
+                        // To Do: tunggu_qc < jumlah_per_ts AND today <= jadwal_selesai
+                        status = 'To Do';
+                        statusBg = 'bg-gray-600';
+                      }
+                    }
+                    
 
                     return (
                       <Card key={`todo-${product.id_product}-${idx}`} className="bg-slate-900 border border-slate-700 hover:border-gray-500 transition-colors">
@@ -431,12 +446,8 @@ export default function TimelineContent({
                               <div className="text-sm font-semibold text-white truncate">{product.product_name || "-"}</div>
                               <div className="text-xs text-gray-300 truncate">{product.id_product || "-"}</div>
                               <div className="text-xs text-gray-400 truncate">Personil: {product.total_personil || "-"}</div>
-                              <Badge className={`border-0 text-xs font-semibold ${
-                                isOverdue 
-                                  ? 'bg-red-600 text-white' 
-                                  : 'bg-gray-600 text-white'
-                              }`}>
-                                {isOverdue ? 'Terlambat / Tidak Tercatat' : 'To Do'}
+                              <Badge className={`border-0 text-xs font-semibold ${statusBg} text-white`}>
+                                {status}
                               </Badge>
                             </div>
                             <div className="flex flex-col gap-0 text-right shrink-0 leading-tight">
@@ -541,7 +552,7 @@ export default function TimelineContent({
                               <div className="text-sm font-semibold text-white truncate">{card.product_name || "-"}</div>
                               <div className="text-xs text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
                               <div className="text-xs text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
-                              <Badge className="bg-blue-600 text-white border-0 text-xs">Belum QC</Badge>
+                              <Badge className="bg-blue-600 text-white border-0 text-xs">{card.status || "Tunggu QC"}</Badge>
                               {overtimeLabel && (
                                 <div className="text-sm font-semibold text-rose-400">{overtimeLabel}</div>
                               )}
@@ -598,12 +609,8 @@ export default function TimelineContent({
                               )}
                             </div>
                             <div className="flex flex-col gap-0 text-right shrink-0 leading-tight">
-                              <div className="text-xs text-gray-400">Estimasi</div>
-                              <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
                               <div className="text-xs text-gray-400 mt-0.5">Selesai</div>
-                              <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.finish_actual)}</div>
-                              <div className="text-xs text-gray-400 mt-0.5">Target</div>
-                              <div className="text-xs text-gray-300">{formatEst(card.total_duration)}</div>
+                              <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.start_actual)}</div>
                             </div>
                           </div>
                         </CardContent>
