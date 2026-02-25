@@ -773,6 +773,7 @@ SELECT
 CASE 
     WHEN l.status = 'Tunggu QC' THEN 1
     WHEN l.status = 'Finish Good' THEN 1
+    WHEN l.status IN ('QC Layout', 'QC Belltest', 'QC Function') THEN 1
     WHEN l.status IN ('On Progress', 'Masuk%', 'Istirahat', 'Tunggu') THEN 0
     WHEN l.finish_actual IS NOT NULL THEN 1
     ELSE 0 

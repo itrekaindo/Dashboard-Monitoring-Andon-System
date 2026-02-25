@@ -90,6 +90,7 @@ SELECT
 
         WHEN 
             COALESCE(p.jumlah_tunggu_qc,0) = j.jumlah_tiapts
+            AND j.trainset = p.trainset
         THEN 'Tepat Waktu'
 
         WHEN 
@@ -118,7 +119,8 @@ FROM jadwal AS j
 LEFT JOIN 
 (
     SELECT 
-        id_product, 
+        id_product,
+        trainset,
 
         SUM(CASE 
             WHEN status = 'Tunggu QC' THEN 1 
@@ -136,9 +138,10 @@ LEFT JOIN
         MONTH(start_actual) = MONTH(CURRENT_DATE()) 
         AND YEAR(start_actual) = YEAR(CURRENT_DATE())
 
-    GROUP BY id_product
+    GROUP BY id_product, trainset
 ) p 
     ON j.id_product = p.id_product
+    AND j.trainset = p.trainset
 
 
 /* ================= IDEAL TIME ================= */
