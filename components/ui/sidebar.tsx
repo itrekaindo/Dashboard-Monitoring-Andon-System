@@ -189,6 +189,7 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
     if (pathname.startsWith('/material')) return 'material';
     if (pathname.startsWith('/operator')) return 'operator';
     if (pathname.startsWith('/schedule')) return 'schedule';
+    if (pathname.startsWith('/product-tracking')) return 'product-tracking';
     if (pathname.startsWith('/production-progress')) return 'production-workstation';
     if (pathname.startsWith('/production/logs')) return 'production-log';
     if (pathname.startsWith('/settings')) return 'settings';
@@ -206,6 +207,7 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
   };
 
   const menuItems: MenuItem[] = [
+    /*
     {
       id: 'dashboard',
       label: 'Dashboard',
@@ -218,6 +220,7 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
       icon: Activity,
       path: '/andon-monitoring'
     },
+    */
     {
       id: 'material',
       label: 'Material',
@@ -235,6 +238,12 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
       label: 'Schedule',
       icon: FileText,
       path: '/schedule'
+    },
+    {
+      id: 'product-tracking',
+      label: 'Product Tracking',
+      icon: Search,
+      path: '/product-tracking'
     },
     {
       id: 'production',
