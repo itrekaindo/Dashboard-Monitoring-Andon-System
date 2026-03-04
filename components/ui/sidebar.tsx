@@ -178,6 +178,15 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
     setIsNotificationModalOpen(!isNotificationModalOpen);
   };
 
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/logout", { method: "POST" });
+    } finally {
+      router.replace("/login");      // pindah ke login
+      router.refresh();              // pastikan state server/middleware ikut kebaca
+    }
+  };
+
   const handleMarkAsRead = () => {
     setUnreadNotificationCount(0);
   };
@@ -346,10 +355,13 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-all text-sm">
-                  <LogOut className="w-4 h-4" />
-                  Logout
-                </button>
+              <button
+                onClick={handleLogout}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-all text-sm"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
                 <button 
                   onClick={handleNotificationClick}
                   className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-all text-sm relative`}
