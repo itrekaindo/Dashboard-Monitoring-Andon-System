@@ -21,6 +21,9 @@ type JadwalPayload = {
   workshop: string | null;
   tanggal_mulai: string | null;
   tanggal_selesai: string | null;
+  operator_assigned1: string | null;
+  operator_assigned2: string | null;
+  operator_assigned3: string | null;
 };
 
 function parseRowResult(result: any) {
@@ -39,6 +42,15 @@ function normalizePayload(body: any): JadwalPayload | null {
   const project = body?.project && String(body.project).trim() ? String(body.project).trim() : null;
   const line = body?.line && String(body.line).trim() ? String(body.line).trim() : null;
   const workshop = body?.workshop && String(body.workshop).trim() ? String(body.workshop).trim() : null;
+  const operator_assigned1 = body?.operator_assigned1 && String(body.operator_assigned1).trim()
+    ? String(body.operator_assigned1).trim()
+    : null;
+  const operator_assigned2 = body?.operator_assigned2 && String(body.operator_assigned2).trim()
+    ? String(body.operator_assigned2).trim()
+    : null;
+  const operator_assigned3 = body?.operator_assigned3 && String(body.operator_assigned3).trim()
+    ? String(body.operator_assigned3).trim()
+    : null;
 
   return {
     id_product,
@@ -51,6 +63,9 @@ function normalizePayload(body: any): JadwalPayload | null {
     workshop,
     tanggal_mulai: body?.tanggal_mulai || null,
     tanggal_selesai: body?.tanggal_selesai || null,
+    operator_assigned1,
+    operator_assigned2,
+    operator_assigned3,
   };
 }
 
@@ -72,16 +87,144 @@ export async function GET(request: Request) {
     if (trainsetParam) {
       const trainset = Number(trainsetParam);
       result = await db.execute(sql`
-        SELECT id_product, product_name, project, trainset, jumlah_tiapts, total_personil, line, workshop, tanggal_mulai, tanggal_selesai
-        FROM jadwal
-        WHERE trainset = ${trainset}
-        ORDER BY tanggal_mulai ASC;
+        SELECT 
+          j.id_product, 
+          j.product_name,
+          j.project,
+          j.trainset, 
+          j.jumlah_tiapts,
+          j.total_personil,
+          j.operator_assigned1,
+          j.operator_assigned2,
+          j.operator_assigned3,
+          j.line,
+          j.workshop,
+          j.tanggal_mulai, 
+          j.tanggal_selesai,
+          COALESCE(p.jumlah_tunggu_qc, 0) AS jumlah_tunggu_qc,
+          COALESCE(p.jumlah_finish_good, 0) AS jumlah_finish_good,
+          it.duration_time AS total_ideal_time_qc,
+          GREATEST(
+            j.jumlah_tiapts - COALESCE(p.jumlah_tunggu_qc,0),
+            0
+          ) AS jumlah_kekurangan,
+          CASE
+            WHEN 
+              COALESCE(p.jumlah_tunggu_qc,0) = j.jumlah_tiapts
+              AND j.trainset = p.trainset
+            THEN 'Tepat Waktu'
+            WHEN 
+              COALESCE(p.jumlah_tunggu_qc,0) <> j.jumlah_tiapts
+              AND CURRENT_DATE() > j.tanggal_selesai
+            THEN 'Terlambat / Tidak Tercatat'
+            WHEN 
+              CURRENT_DATE() BETWEEN 
+                DATE_SUB(j.tanggal_selesai, INTERVAL 3 DAY)
+                AND j.tanggal_selesai
+            THEN CONCAT('Kurang ', DATEDIFF(j.tanggal_selesai, CURRENT_DATE()), ' Hari')
+            WHEN 
+              MONTH(j.tanggal_selesai) <> MONTH(CURRENT_DATE())
+              OR YEAR(j.tanggal_selesai) <> YEAR(CURRENT_DATE())
+            THEN 'Waiting List'
+            ELSE 'On Progress'
+          END AS status
+        FROM jadwal AS j 
+        LEFT JOIN 
+        (
+          SELECT 
+            id_product,
+            trainset,
+            SUM(CASE 
+              WHEN status = 'Tunggu QC' THEN 1 
+              ELSE 0 
+            END) AS jumlah_tunggu_qc,
+            SUM(CASE 
+              WHEN status = 'Finish Good' THEN 1 
+              ELSE 0 
+            END) AS jumlah_finish_good
+          FROM production_progress
+          WHERE 
+            MONTH(start_actual) = MONTH(CURRENT_DATE()) 
+            AND YEAR(start_actual) = YEAR(CURRENT_DATE())
+          GROUP BY id_product, trainset
+        ) p 
+          ON j.id_product = p.id_product
+          AND j.trainset = p.trainset
+        LEFT JOIN ideal_time it
+          ON j.id_product = it.id_product
+          AND it.process_name = 'total_production_qc'
+        WHERE j.trainset = ${trainset}
+        ORDER BY j.tanggal_mulai ASC;
       `);
     } else {
       result = await db.execute(sql`
-        SELECT id_product, product_name, project, trainset, jumlah_tiapts, total_personil, line, workshop, tanggal_mulai, tanggal_selesai
-        FROM jadwal
-        ORDER BY tanggal_mulai ASC;
+        SELECT 
+          j.id_product, 
+          j.product_name,
+          j.project,
+          j.trainset, 
+          j.jumlah_tiapts,
+          j.total_personil,
+          j.operator_assigned1,
+          j.operator_assigned2,
+          j.operator_assigned3,
+          j.line,
+          j.workshop,
+          j.tanggal_mulai, 
+          j.tanggal_selesai,
+          COALESCE(p.jumlah_tunggu_qc, 0) AS jumlah_tunggu_qc,
+          COALESCE(p.jumlah_finish_good, 0) AS jumlah_finish_good,
+          it.duration_time AS total_ideal_time_qc,
+          GREATEST(
+            j.jumlah_tiapts - COALESCE(p.jumlah_tunggu_qc,0),
+            0
+          ) AS jumlah_kekurangan,
+          CASE
+            WHEN 
+              COALESCE(p.jumlah_tunggu_qc,0) = j.jumlah_tiapts
+              AND j.trainset = p.trainset
+            THEN 'Tepat Waktu'
+            WHEN 
+              COALESCE(p.jumlah_tunggu_qc,0) <> j.jumlah_tiapts
+              AND CURRENT_DATE() > j.tanggal_selesai
+            THEN 'Terlambat / Tidak Tercatat'
+            WHEN 
+              CURRENT_DATE() BETWEEN 
+                DATE_SUB(j.tanggal_selesai, INTERVAL 3 DAY)
+                AND j.tanggal_selesai
+            THEN CONCAT('Kurang ', DATEDIFF(j.tanggal_selesai, CURRENT_DATE()), ' Hari')
+            WHEN 
+              MONTH(j.tanggal_selesai) <> MONTH(CURRENT_DATE())
+              OR YEAR(j.tanggal_selesai) <> YEAR(CURRENT_DATE())
+            THEN 'Waiting List'
+            ELSE 'On Progress'
+          END AS status
+        FROM jadwal AS j 
+        LEFT JOIN 
+        (
+          SELECT 
+            id_product,
+            trainset,
+            SUM(CASE 
+              WHEN status = 'Tunggu QC' THEN 1 
+              ELSE 0 
+            END) AS jumlah_tunggu_qc,
+            SUM(CASE 
+              WHEN status = 'Finish Good' THEN 1 
+              ELSE 0 
+            END) AS jumlah_finish_good
+          FROM production_progress
+          WHERE 
+            MONTH(start_actual) = MONTH(CURRENT_DATE()) 
+            AND YEAR(start_actual) = YEAR(CURRENT_DATE())
+          GROUP BY id_product, trainset
+        ) p 
+          ON j.id_product = p.id_product
+          AND j.trainset = p.trainset
+        LEFT JOIN ideal_time it
+          ON j.id_product = it.id_product
+          AND it.process_name = 'total_production_qc'
+        ORDER BY j.tanggal_mulai ASC;
       `);
     }
 
@@ -103,9 +246,9 @@ export async function POST(request: Request) {
 
     await db.execute(sql`
       INSERT INTO jadwal
-        (id_product, product_name, project, trainset, jumlah_tiapts, total_personil, line, workshop, tanggal_mulai, tanggal_selesai)
+        (id_product, product_name, project, trainset, jumlah_tiapts, total_personil, operator_assigned1, operator_assigned2, operator_assigned3, line, workshop, tanggal_mulai, tanggal_selesai)
       VALUES
-        (${payload.id_product}, ${payload.product_name}, ${payload.project}, ${payload.trainset}, ${payload.jumlah_tiapts}, ${payload.total_personil}, ${payload.line}, ${payload.workshop}, ${payload.tanggal_mulai}, ${payload.tanggal_selesai})
+        (${payload.id_product}, ${payload.product_name}, ${payload.project}, ${payload.trainset}, ${payload.jumlah_tiapts}, ${payload.total_personil}, ${payload.operator_assigned1}, ${payload.operator_assigned2}, ${payload.operator_assigned3}, ${payload.line}, ${payload.workshop}, ${payload.tanggal_mulai}, ${payload.tanggal_selesai})
     `);
 
     return NextResponse.json({ success: true });
@@ -133,6 +276,9 @@ export async function PUT(request: Request) {
         trainset = ${payload.trainset},
         jumlah_tiapts = ${payload.jumlah_tiapts},
         total_personil = ${payload.total_personil},
+        operator_assigned1 = ${payload.operator_assigned1},
+        operator_assigned2 = ${payload.operator_assigned2},
+        operator_assigned3 = ${payload.operator_assigned3},
         line = ${payload.line},
         workshop = ${payload.workshop},
         tanggal_mulai = ${payload.tanggal_mulai},

@@ -47,6 +47,7 @@ export interface WorkstationStats {
   completed: number;
   avg_duration_sec: number;
   active_operator: string | null;
+  current_status: string | null;
   product_name: string | null;
   id_perproduct: string | null;
 }
@@ -366,6 +367,7 @@ export async function getWorkstationStats(): Promise<WorkstationStats[]> {
         SUM(CASE WHEN finish_actual IS NOT NULL THEN 1 ELSE 0 END) as completed,
         AVG(duration_sec_actual) as avg_duration_sec,
         MAX(operator_actual_name) as active_operator,
+        MAX(status) as current_status,
         MAX(product_name) as product_name,
         MAX(id_perproduct) as id_perproduct
       FROM production_progress
@@ -526,7 +528,7 @@ WITH RankedData AS (
     FROM production_progress AS pp
     LEFT JOIN ideal_time AS t 
         ON pp.id_product = t.id_product 
-        AND pp.workstation = t.workstation
+        AND pp.status = t.status
     WHERE DATE(pp.start_actual) = CURDATE()
     AND pp.status NOT IN ('Tunggu Selesai', 'Gangguan Selesai')
 )
@@ -615,7 +617,6 @@ SELECT
   pp.product_name,
   pp.start_actual,
 
-  /* ================= STATUS CUSTOM ================= */
   CASE
     WHEN
       pp.status = 'On Progress'
@@ -632,7 +633,6 @@ SELECT
 
   pp.note_qc,
 
-  /* ================= KATEGORI ================= */
   CASE
     WHEN
       pp.status = 'On Progress'
@@ -645,38 +645,42 @@ SELECT
       )
     THEN 'On Progress > 3 hari'
 
-WHEN pp.status IN ('Gangguan', 'Not OK', 'Kurang Komponen') OR (TRIM(note_qc) IS NOT NULL AND TRIM(note_qc) != '')
+    WHEN
+      pp.status IN ('Gangguan', 'Not OK', 'Kurang Komponen')
+      OR (TRIM(pp.note_qc) IS NOT NULL AND TRIM(pp.note_qc) != '')
     THEN 'Laporan Abnormal'
+
   END AS kategori
 
 FROM production_progress pp
 
 WHERE
+    pp.start_actual >= NOW() - INTERVAL ${daysBack} DAY 
+
+AND
 (
-    /* QUERY 1 — ON PROGRESS > 3 HARI */
-    pp.status = 'On Progress'
-    AND pp.start_actual <= NOW() - INTERVAL 3 DAY
-    AND pp.start_actual = (
-        SELECT MAX(sub.start_actual)
-        FROM production_progress sub
-        WHERE sub.id_perproduct = pp.id_perproduct
-    )
-    AND NOT EXISTS (
-        SELECT 1
-        FROM production_progress qc
-        WHERE qc.id_perproduct = pp.id_perproduct
-          AND qc.status = 'Tunggu QC'
-    )
-)
-OR
-(
-    /* QUERY 2 — ABNORMAL PERIODE */
-    pp.status IN ('Gangguan', 'Not OK', 'Kurang Komponen')
-    AND pp.start_actual >= NOW() - INTERVAL ${daysBack} DAY
-)
-    OR (
-    TRIM(note_qc) IS NOT NULL 
-    AND TRIM(note_qc) != ''
+      (
+        pp.status = 'On Progress'
+        AND pp.start_actual <= NOW() - INTERVAL 3 DAY
+        AND pp.start_actual = (
+            SELECT MAX(sub.start_actual)
+            FROM production_progress sub
+            WHERE sub.id_perproduct = pp.id_perproduct
+        )
+        AND NOT EXISTS (
+            SELECT 1
+            FROM production_progress qc
+            WHERE qc.id_perproduct = pp.id_perproduct
+              AND qc.status = 'Tunggu QC'
+        )
+      )
+
+   OR
+
+      (
+        pp.status IN ('Gangguan', 'Not OK', 'Kurang Komponen')
+        OR (TRIM(pp.note_qc) IS NOT NULL AND TRIM(pp.note_qc) != '')
+      )
 );
     `);
     

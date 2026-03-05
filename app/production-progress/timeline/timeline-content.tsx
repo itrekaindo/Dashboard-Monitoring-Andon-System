@@ -29,8 +29,7 @@ function formatEst(duration?: string | null) {
   const [hh, mm, ss] = parts;
   return `${hh}j ${mm}m ${ss}d`;
 }
-
-const arrowAnimationStyle = `
+{/*const arrowAnimationStyle = `
   @keyframes slideArrow {
     0% { transform: translateX(0); opacity: 0.3; }
     50% { opacity: 1; }
@@ -40,6 +39,7 @@ const arrowAnimationStyle = `
     animation: slideArrow 1.5s ease-in-out infinite;
   }
 `;
+\/ End of arrow animation style */}
 
 function formatDurationSec(sec: number | null | undefined) {
   if (sec === null || sec === undefined) return "—";
@@ -85,11 +85,14 @@ function statusVariant(status?: string) {
   if (lower.includes("gangguan")) {
     return { bg: "bg-rose-600", border: "border-rose-400", text: "text-white", blink: true };
   }
-  if (lower.includes("tunggu")) {
+  if (lower.includes("istirahat")) {
     return { bg: "bg-amber-400", border: "border-amber-300", text: "text-gray-900", blink: true };
   }
-  if (lower.includes("masuk")) {
-    return { bg: "bg-emerald-500", border: "border-emerald-300", text: "text-white", blink: false };
+  if (lower.includes("masuk") || lower.includes("on progress")) {
+    return { bg: "bg-emerald-500", border: "border-emerald-300", text: "text-white", blink: true };
+  }
+  if (lower.includes("tunggu qc")) {
+    return { bg: "bg-blue-500", border: "border-blue-300", text: "text-white", blink: false };
   }
   return { bg: "bg-gray-700", border: "border-gray-500", text: "text-white", blink: false };
 }
@@ -101,16 +104,16 @@ function getStatusColor(status?: string | null) {
   if (lower.includes('gangguan')) {
     return { bg: 'bg-rose-900/30', border: 'border-rose-600', text: 'text-rose-300' };
   }
-  if (lower.includes('tunggu')) {
+  if (lower.includes('istirahat')) {
     return { bg: 'bg-amber-900/30', border: 'border-amber-600', text: 'text-amber-300' };
   }
-  if (lower.includes('selesai ws') || lower.includes('finish')) {
+  if (lower.includes('masuk') || lower.includes('on progress')) {
     return { bg: 'bg-emerald-900/30', border: 'border-emerald-600', text: 'text-emerald-300' };
   }
   if (lower.includes('not ok') || lower.includes('tidak ok')) {
     return { bg: 'bg-red-900/30', border: 'border-red-600', text: 'text-red-300' };
   }
-  if (lower.includes('masuk')) {
+  if (lower.includes('tunggu qc')) {
     return { bg: 'bg-blue-900/30', border: 'border-blue-600', text: 'text-blue-300' };
   }
   if (lower.includes('login')) {
@@ -154,7 +157,7 @@ export default function TimelineContent({
   const fetchData = async (days: number = daysBack) => {
     setIsLoading(true);
     try {
-      console.log('[Timeline] Fetching data at', new Date().toLocaleTimeString('id-ID'));
+      //console.log('[Timeline] Fetching data at', new Date().toLocaleTimeString('id-ID'));
       const response = await fetch(`/api/production-progress/current?daysBack=${days}`, {
         cache: 'no-store',
       });
@@ -219,6 +222,7 @@ export default function TimelineContent({
       total_processes: agg?.total_processes ?? 0,
       completed: agg?.completed ?? 0,
       avg_duration_sec: agg?.avg_duration_sec ?? 0,
+      current_status: (cur?.current_status || null) as string | null,
       active_operator: (cur?.current_operator_actual_name || null) as string | null,
       product_name: (cur?.current_product_name || null) as string | null,
       id_perproduct: (cur?.current_id_perproduct || null) as string | null,
@@ -227,7 +231,8 @@ export default function TimelineContent({
 
   return (
     <>
-      <style>{arrowAnimationStyle}</style>
+       {/* <style>{arrowAnimationStyle}</style> */}
+
       <div className="p-6 sm:p-8 space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -293,9 +298,12 @@ export default function TimelineContent({
                   const info = statusInfo.get(ws.workstation ?? 0);
                   const status = info?.status;
                   const variant = statusVariant(status);
-                  const showElapsed = (status || "").toLowerCase().includes("masuk") && variant.bg.includes("emerald");
-                  const isWaitingMulai = (status || "").toLowerCase().includes("tunggu mulai");
-                  const isWaitingSelesai = (status || "").toLowerCase().includes("tunggu selesai");
+                  const showElapsed = (
+                    (status || "").toLowerCase().includes("on progress") || 
+                    (status || "").toLowerCase().includes("masuk") 
+                  ) && (variant.bg.includes("emerald") || variant.bg.includes("blue"));
+                  const isWaitingMulai = (status || "").toLowerCase().includes("istirahat");
+                  const isWaitingSelesai = (status || "").toLowerCase().includes("on progress") || (status || "").toLowerCase().includes("masuk");
                   const showWaitingElapsed = isWaitingMulai && !isWaitingSelesai;
                   const isPausedWaiting = isWaitingSelesai;
                   const baseClass = `${variant.bg} ${variant.border} ${variant.text}`;
@@ -327,15 +335,12 @@ export default function TimelineContent({
                                         ? "bg-amber-400"
                                         : variant.bg.includes("emerald")
                                           ? "bg-emerald-400"
-                                          : "bg-gray-600")}
+                                          : variant.bg.includes("blue")
+                                            ? "bg-blue-400"
+                                            : "bg-gray-600")}
                                   style={{ width: "100%" }}
                                 />
                               </div>
-                              {variant.bg.includes("emerald") && (
-                                <div className="absolute inset-0 flex items-center justify-center animate-slide-arrow">
-                                  <ChevronRight className="w-8 h-8 text-emerald-400" />
-                                </div>
-                              )}
                               <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 text-[10px] text-gray-400 whitespace-nowrap">EST : {estTime}</div>
                             </div>
                           </div>
@@ -348,10 +353,12 @@ export default function TimelineContent({
                       
                       <div className="flex flex-col mt-3 shrink-0 w-24">
                         <div className="text-xs text-gray-300 text-center truncate font-semibold">{ws.product_name || "-"}</div>
-                        <div className="text-[10px] text-gray-400 text-center truncate">{ws.id_perproduct || "-"}</div>
                         <div className="text-xs text-gray-300 text-center truncate">{ws.active_operator || "-"}</div>
+                         <div className="text-[10px] text-gray-400 text-center truncate">{ws.current_status || "-"}</div>
                         {showElapsed ? (
-                          <Elapsed since={info?.at} className="text-[11px] text-gray-400 text-center truncate" />
+                          <Elapsed since={info?.at} className={`text-[11px] text-center truncate ${
+                            variant.bg.includes("blue") ? "text-blue-400" : "text-gray-400"
+                          }`} />
                         ) : showWaitingElapsed && info?.at ? (
                           <div className="text-[11px] text-amber-400 text-center truncate font-semibold">
                             <Elapsed since={info?.at} isPaused={isPausedWaiting} />
@@ -604,9 +611,6 @@ export default function TimelineContent({
                               <div className="text-xs text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
                               <div className="text-xs text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
                               <Badge className="bg-emerald-600 text-white border-0 text-xs">Finish Good</Badge>
-                              {overtimeLabel && (
-                                <div className="text-sm font-semibold text-rose-400">{overtimeLabel}</div>
-                              )}
                             </div>
                             <div className="flex flex-col gap-0 text-right shrink-0 leading-tight">
                               <div className="text-xs text-gray-400 mt-0.5">Selesai</div>
@@ -800,6 +804,7 @@ export default function TimelineContent({
             <div className="text-white font-semibold mb-4 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-rose-400" />
               Abnormal Progress
+              <span className="text-xs text-gray-400">({daysBack} hari terakhir)</span>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

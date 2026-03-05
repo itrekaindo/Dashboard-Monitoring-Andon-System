@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       getAbnormalProgress(daysBack),
     ]);
 
-    console.log('[GET /api/production-progress/current] Schedule items:', schedule?.length || 0);
+    //console.log('[GET /api/production-progress/current] Schedule items:', schedule?.length || 0);
 
     return NextResponse.json({
       count: data.length,
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       abnormal,
     });
   } catch (error) {
-    console.error("[GET /api/production-progress/current]", error);
+    //console.error("[GET /api/production-progress/current]", error);
     return NextResponse.json(
       { error: "Failed to fetch current workstation data" },
       { status: 500 }

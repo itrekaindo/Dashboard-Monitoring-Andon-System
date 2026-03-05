@@ -380,6 +380,11 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
     };
   }, [rows]); // Refetch when rows change
 
+  // Auto-refresh data on page load
+  useEffect(() => {
+    refreshRows();
+  }, []); // Run once on mount
+
   const filteredRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     let filtered = rows.filter((row) => {
@@ -647,130 +652,6 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
 
 
 
-      {showFormCard && (
-        <Card className="bg-gray-900/40 border border-gray-700/50">
-          <CardContent className="p-6 space-y-4">
-            <div className="flex items-center gap-2 text-white">
-              {editingKey ? (
-                <>
-                  <Pencil className="w-4 h-4 text-amber-400" />
-                  <h2 className="text-lg font-semibold">Ubah Jadwal</h2>
-                  <Badge className="bg-amber-500/10 text-amber-300 border border-amber-500/40">Editing</Badge>
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4 text-emerald-400" />
-                  <h2 className="text-lg font-semibold">Tambah Jadwal</h2>
-                </>
-              )}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-300">ID Product <span className="text-red-500">*</span></label>
-                <input value={currentForm.id_product} onChange={(e) => updateFormField('id_product', e.target.value)} placeholder="Masukan ID Product" className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-300">Product Name <span className="text-red-500">*</span></label>
-                <input value={currentForm.product_name} onChange={(e) => updateFormField('product_name', e.target.value)} placeholder="Masukan Product Name" className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-300">Project <span className="text-red-500">*</span></label>
-                <input 
-                  list="project-list" 
-                  value={currentForm.project} 
-                  onChange={(e) => updateFormField('project', e.target.value)} 
-                  placeholder="Pilih atau ketik Project" 
-                  autoComplete="off"
-                  className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
-                />
-                <datalist id="project-list">
-                  {getUniqueValues(rows, 'project').map((val) => (
-                    <option key={val} value={val}>{val}</option>
-                  ))}
-                </datalist>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-300">Trainset <span className="text-red-500">*</span></label>
-                <input 
-                  list="trainset-list" 
-                  value={currentForm.trainset} 
-                  onChange={(e) => updateFormField('trainset', e.target.value)} 
-                  placeholder="Pilih atau ketik Trainset" 
-                  autoComplete="off"
-                  className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
-                  type="number" 
-                />
-                <datalist id="trainset-list">
-                  {getUniqueValues(rows, 'trainset').map((val) => (
-                    <option key={val} value={val}>{val}</option>
-                  ))}
-                </datalist>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-300">Jumlah Tiap TS <span className="text-red-500">*</span></label>
-                <input value={currentForm.jumlah_tiapts} onChange={(e) => updateFormField('jumlah_tiapts', e.target.value)} placeholder="Masukan jumlah" className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" type="number" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-300">Total Personil <span className="text-red-500">*</span></label>
-                <input value={currentForm.total_personil} onChange={(e) => updateFormField('total_personil', e.target.value)} placeholder="Masukan total personil" className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" type="number" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-300">Line <span className="text-red-500">*</span></label>
-                <input 
-                  list="line-list" 
-                  value={currentForm.line} 
-                  onChange={(e) => updateFormField('line', e.target.value)} 
-                  placeholder="Pilih atau ketik Line" 
-                  autoComplete="off"
-                  className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
-                />
-                <datalist id="line-list">
-                  {getUniqueValues(rows, 'line').map((val) => (
-                    <option key={val} value={val}>{val}</option>
-                  ))}
-                </datalist>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-300">Workshop <span className="text-red-500">*</span></label>
-                <input 
-                  list="workshop-list" 
-                  value={currentForm.workshop} 
-                  onChange={(e) => updateFormField('workshop', e.target.value)} 
-                  placeholder="Pilih atau ketik Workshop" 
-                  autoComplete="off"
-                  className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
-                />
-                <datalist id="workshop-list">
-                  {getUniqueValues(rows, 'workshop').map((val) => (
-                    <option key={val} value={val}>{val}</option>
-                  ))}
-                </datalist>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-300">Tanggal Mulai <span className="text-red-500">*</span></label>
-                <input value={currentForm.tanggal_mulai} onChange={(e) => updateFormField('tanggal_mulai', e.target.value)} className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50" type="date" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-300">Tanggal Selesai <span className="text-red-500">*</span></label>
-                <input value={currentForm.tanggal_selesai} onChange={(e) => updateFormField('tanggal_selesai', e.target.value)} className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50" type="date" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3">
-              <button onClick={cancelEdit} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-600/70 text-gray-300 hover:text-white">
-                <X className="w-4 h-4" />
-                Batal
-              </button>
-              <button onClick={editingKey ? handleUpdate : handleCreate} disabled={isSubmitting || !isValidForm(currentForm)} className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${editingKey ? "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30 disabled:hover:bg-amber-500/20" : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30 disabled:hover:bg-emerald-500/20"}`}>
-                <Save className="w-4 h-4" />
-                {editingKey ? "Update" : "Simpan"}
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-
-
       {/* Gantt Chart */}
       {filteredRows.length > 0 && (() => {
         let { minDate, maxDate, totalDays } = getDateRange(filteredRows);
@@ -829,6 +710,24 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
         
         // Get today's date key for comparison
         const todayKey = toDateKey(today);
+        const selectedMonthRange = (() => {
+          if (monthYearFilter === 'all') return null;
+          const [yearText, monthText] = monthYearFilter.split('-');
+          const year = Number(yearText);
+          const month = Number(monthText);
+
+          if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+            return null;
+          }
+
+          const start = new Date(year, month - 1, 1);
+          start.setHours(0, 0, 0, 0);
+
+          const end = new Date(year, month, 0);
+          end.setHours(23, 59, 59, 999);
+
+          return { start, end };
+        })();
         
         return (
           <Card className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50">
@@ -1013,38 +912,67 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                               {/* Progress Bar Overlay */}
                               {showProgressBar && (() => {
                                 const progressBars: React.ReactNode[] = [];
-                                const processItems = processBarData.filter(item => item.id_product === row.id_product);
-                                
-                                // Create unique id_perproduct list to assign consistent numbers
-                                const uniqueIdPerproducts: (string | null | undefined)[] = [];
-                                processItems.forEach((item) => {
-                                  const id = item.id_perproduct;
-                                  if (!uniqueIdPerproducts.includes(id)) {
-                                    uniqueIdPerproducts.push(id);
+                                const processItems = processBarData.filter((item) => item.id_product === row.id_product);
+                                const dayInMs = 1000 * 60 * 60 * 24;
+                                const visibleRangeStart = selectedMonthRange ? selectedMonthRange.start : minDate;
+                                const visibleRangeEnd = selectedMonthRange ? selectedMonthRange.end : maxDate;
+
+                                const processItemsInRange = processItems
+                                  .filter((item) => {
+                                    const startDate = item.start_actual ? new Date(item.start_actual) : null;
+                                    const finishDate = item.finish_actual ? new Date(item.finish_actual) : null;
+
+                                    const validStart = startDate && !Number.isNaN(startDate.valueOf()) ? startDate : null;
+                                    const validFinish = finishDate && !Number.isNaN(finishDate.valueOf()) ? finishDate : null;
+
+                                    const rangeStart = validStart || validFinish;
+                                    const rangeEnd = validFinish || validStart;
+
+                                    if (!rangeStart || !rangeEnd) return false;
+
+                                    return rangeEnd >= visibleRangeStart && rangeStart <= visibleRangeEnd;
+                                  })
+                                  .sort((a, b) => {
+                                    const aStart = a.start_actual ? new Date(a.start_actual).getTime() : Number.MAX_SAFE_INTEGER;
+                                    const bStart = b.start_actual ? new Date(b.start_actual).getTime() : Number.MAX_SAFE_INTEGER;
+                                    if (aStart !== bStart) return aStart - bStart;
+                                    return (a.id_perproduct || '').localeCompare(b.id_perproduct || '');
+                                  });
+
+                                const barNumberById = new Map<string, number>();
+                                processItemsInRange.forEach((item) => {
+                                  const id = (item.id_perproduct || '').trim();
+                                  if (!id) return;
+                                  if (!barNumberById.has(id)) {
+                                    barNumberById.set(id, barNumberById.size + 1);
                                   }
                                 });
-                                
-                                processItems.forEach((processItem, pIdx) => {
+
+                                processItemsInRange.forEach((processItem, pIdx) => {
                                   if (!processItem.start_actual && !processItem.finish_actual) return;
-                                  
-                                  // Get bar number based on unique id_perproduct index
-                                  const barNumber = uniqueIdPerproducts.indexOf(processItem.id_perproduct) + 1;
-                                  
+
                                   const startDate = processItem.start_actual ? new Date(processItem.start_actual) : null;
                                   const finishDate = processItem.finish_actual ? new Date(processItem.finish_actual) : null;
-                                  
+
                                   if (startDate && !Number.isNaN(startDate.valueOf())) {
-                                    const startOffset = Math.max(0, (startDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
-                                    const endOffset = finishDate && !Number.isNaN(finishDate.valueOf())
-                                      ? Math.max(0, (finishDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24))
-                                      : startOffset;
-                                    
+                                    const validFinishDate = finishDate && !Number.isNaN(finishDate.valueOf()) ? finishDate : startDate;
+                                    const clampedStartTime = Math.max(startDate.getTime(), minDate.getTime(), visibleRangeStart.getTime());
+                                    const clampedEndTime = Math.min(validFinishDate.getTime(), maxDate.getTime(), visibleRangeEnd.getTime());
+
+                                    if (clampedEndTime < clampedStartTime) return;
+
+                                    const startOffset = (clampedStartTime - minDate.getTime()) / dayInMs;
+                                    const endOffset = (clampedEndTime - minDate.getTime()) / dayInMs;
+
                                     const duration = Math.max(1, endOffset - startOffset + 1);
                                     const progressLeftPercent = (startOffset / totalDays) * 100;
                                     const progressWidthPercent = (duration / totalDays) * 100;
-                                    
+
                                     const operatorName = processItem.operator_actual_name || 'Unknown';
                                     const idProd = processItem.id_perproduct || '-';
+                                    const barNumber = processItem.id_perproduct
+                                      ? (barNumberById.get(processItem.id_perproduct) || pIdx + 1)
+                                      : pIdx + 1;
                                     const hoverText = `ID: ${idProd}\nOperator: ${operatorName}\n${processItem.product_name || '-'}\nStart: ${formatDate(startDate)}\nFinish: ${formatDate(finishDate)}`;
                                     
                                     progressBars.push(
@@ -1085,7 +1013,7 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
       {statistics && (
         <Card className="bg-gray-800/50 border border-gray-700/50">
           <CardContent className="p-6 overflow-x-auto">
-            <div className="grid grid-cols-8 gap-4 min-w-max">
+            <div className="grid grid-cols-7 gap-4 min-w-max">
               {/* Target Total TS */}
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-gray-500/20 flex items-center justify-center flex-shrink-0">
@@ -1169,26 +1097,133 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                   <p className="text-xs text-red-400/70">{Number(statistics.persen_kekurangan || 0).toFixed(0)}%</p>
                 </div>
               </div>
-
-
-              
-              {/* Waiting List */}
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-                  <Hourglass className="w-6 h-6 text-amber-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-400 truncate">Waiting List</p>
-                  <p className="text-xl font-bold text-amber-400">{statistics.total_waiting_list || 0} <span className="text-sm font-normal text-amber-400/60">Item</span></p>
-                  <p className="text-xs text-amber-400/70">{Number(statistics.persen_waiting_list || 0).toFixed(0)}%</p>
-                </div>
-              </div>
-          
-
             </div>
           </CardContent>
         </Card>
       )}
+
+           {showFormCard && (
+        <Card className="bg-gray-900/40 border border-gray-700/50">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center gap-2 text-white">
+              {editingKey ? (
+                <>
+                  <Pencil className="w-4 h-4 text-amber-400" />
+                  <h2 className="text-lg font-semibold">Ubah Jadwal</h2>
+                  <Badge className="bg-amber-500/10 text-amber-300 border border-amber-500/40">Editing</Badge>
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 text-emerald-400" />
+                  <h2 className="text-lg font-semibold">Tambah Jadwal</h2>
+                </>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-300">ID Product <span className="text-red-500">*</span></label>
+                <input value={currentForm.id_product} onChange={(e) => updateFormField('id_product', e.target.value)} placeholder="Masukan ID Product" className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-300">Product Name <span className="text-red-500">*</span></label>
+                <input value={currentForm.product_name} onChange={(e) => updateFormField('product_name', e.target.value)} placeholder="Masukan Product Name" className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-300">Project <span className="text-red-500">*</span></label>
+                <input 
+                  list="project-list" 
+                  value={currentForm.project} 
+                  onChange={(e) => updateFormField('project', e.target.value)} 
+                  placeholder="Pilih atau ketik Project" 
+                  autoComplete="off"
+                  className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
+                />
+                <datalist id="project-list">
+                  {getUniqueValues(rows, 'project').map((val) => (
+                    <option key={val} value={val}>{val}</option>
+                  ))}
+                </datalist>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-300">Trainset <span className="text-red-500">*</span></label>
+                <input 
+                  list="trainset-list" 
+                  value={currentForm.trainset} 
+                  onChange={(e) => updateFormField('trainset', e.target.value)} 
+                  placeholder="Pilih atau ketik Trainset" 
+                  autoComplete="off"
+                  className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
+                  type="number" 
+                />
+                <datalist id="trainset-list">
+                  {getUniqueValues(rows, 'trainset').map((val) => (
+                    <option key={val} value={val}>{val}</option>
+                  ))}
+                </datalist>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-300">Jumlah Tiap TS <span className="text-red-500">*</span></label>
+                <input value={currentForm.jumlah_tiapts} onChange={(e) => updateFormField('jumlah_tiapts', e.target.value)} placeholder="Masukan jumlah" className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" type="number" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-300">Total Personil <span className="text-red-500">*</span></label>
+                <input value={currentForm.total_personil} onChange={(e) => updateFormField('total_personil', e.target.value)} placeholder="Masukan total personil" className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" type="number" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-300">Line <span className="text-red-500">*</span></label>
+                <input 
+                  list="line-list" 
+                  value={currentForm.line} 
+                  onChange={(e) => updateFormField('line', e.target.value)} 
+                  placeholder="Pilih atau ketik Line" 
+                  autoComplete="off"
+                  className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
+                />
+                <datalist id="line-list">
+                  {getUniqueValues(rows, 'line').map((val) => (
+                    <option key={val} value={val}>{val}</option>
+                  ))}
+                </datalist>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-300">Workshop <span className="text-red-500">*</span></label>
+                <input 
+                  list="workshop-list" 
+                  value={currentForm.workshop} 
+                  onChange={(e) => updateFormField('workshop', e.target.value)} 
+                  placeholder="Pilih atau ketik Workshop" 
+                  autoComplete="off"
+                  className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
+                />
+                <datalist id="workshop-list">
+                  {getUniqueValues(rows, 'workshop').map((val) => (
+                    <option key={val} value={val}>{val}</option>
+                  ))}
+                </datalist>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-300">Tanggal Mulai <span className="text-red-500">*</span></label>
+                <input value={currentForm.tanggal_mulai} onChange={(e) => updateFormField('tanggal_mulai', e.target.value)} className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50" type="date" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-300">Tanggal Selesai <span className="text-red-500">*</span></label>
+                <input value={currentForm.tanggal_selesai} onChange={(e) => updateFormField('tanggal_selesai', e.target.value)} className="w-full px-3 py-2 bg-gray-800/70 border border-gray-700/60 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50" type="date" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={cancelEdit} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-600/70 text-gray-300 hover:text-white">
+                <X className="w-4 h-4" />
+                Batal
+              </button>
+              <button onClick={editingKey ? handleUpdate : handleCreate} disabled={isSubmitting || !isValidForm(currentForm)} className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${editingKey ? "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30 disabled:hover:bg-amber-500/20" : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30 disabled:hover:bg-emerald-500/20"}`}>
+                <Save className="w-4 h-4" />
+                {editingKey ? "Update" : "Simpan"}
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
 
             <div className="flex flex-col gap-4 md:flex-row md:items-center">
         <div className="flex-1 relative">

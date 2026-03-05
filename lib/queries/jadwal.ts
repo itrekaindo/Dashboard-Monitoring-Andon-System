@@ -40,6 +40,13 @@ export interface StatisticRow {
   total_tepat_waktu_item: number | null;
   persen_tepat_waktu_item: number | null;
 }
+
+export interface OperatorProductRow {
+  id_product: string | null;
+  product_name: string | null;
+  jumlah_tunggu_qc: number | null;
+  daftar_operator: string | null;
+};
 /*
 export async function getAllJadwal(): Promise<JadwalRow[]> {
   try {
@@ -231,8 +238,14 @@ SELECT
 
     /* ================= STATUS ================= */
 
-    SUM(CASE WHEN status = 'On Progress' THEN 1 ELSE 0 END) 
+    MAX(on_progress.total_on_progress)
         AS total_on_progress,
+
+    ROUND(
+        MAX(on_progress.total_on_progress)
+        / MAX(target.total_target_ts) * 100,
+        0
+    ) AS persen_on_progress,
 
     SUM(CASE WHEN status = 'Waiting List' THEN 1 ELSE 0 END) 
         AS total_waiting_list,
@@ -284,7 +297,10 @@ SELECT
         )
         / MAX(target.total_target_ts) * 100,
         0
-    ) AS persen_kekurangan
+    ) AS persen_kekurangan,
+
+    SUM(CASE WHEN status = 'On Progress' THEN 1 ELSE 0 END) 
+        AS persen_waiting_list
 
 
 
@@ -312,8 +328,8 @@ FROM
                 AND COALESCE(p.jumlah_tunggu_qc,0) = 0
             THEN 'On Progress'
 
-            ELSE 'On Progress'
-
+            ELSE 'On Progress'  
+                
         END AS status
 
     FROM jadwal j
@@ -327,6 +343,14 @@ FROM
         GROUP BY id_product
     ) p
         ON j.id_product = p.id_product
+
+    WHERE EXISTS (
+        SELECT 1
+        FROM production_progress pp_month
+        WHERE pp_month.id_product = j.id_product
+          AND MONTH(pp_month.start_actual) = MONTH(CURRENT_DATE())
+          AND YEAR(pp_month.start_actual) = YEAR(CURRENT_DATE())
+    )
 
 ) status_data
 
@@ -375,15 +399,15 @@ CROSS JOIN
 CROSS JOIN
 (
     SELECT     
-        COUNT(*) AS total_tepat_waktu_item
+        COUNT(DISTINCT pp.id_perproduct) AS total_tepat_waktu_item
     FROM production_progress pp 
     JOIN jadwal j    
         ON pp.id_product = j.id_product 
     WHERE      
         pp.status = 'Tunggu QC'     
+        AND MONTH(pp.start_actual) = MONTH(CURRENT_DATE())     
+        AND YEAR(pp.start_actual) = YEAR(CURRENT_DATE())
         AND pp.start_actual <= j.tanggal_selesai     
-        AND MONTH(j.tanggal_selesai) = MONTH(CURRENT_DATE())     
-        AND YEAR(j.tanggal_selesai) = YEAR(CURRENT_DATE())
 ) tepat_waktu
 
 
@@ -392,7 +416,7 @@ CROSS JOIN
 CROSS JOIN
 (
     SELECT     
-        COUNT(*) AS total_terlambat_item
+        COUNT(DISTINCT pp.id_perproduct) AS total_terlambat_item
     FROM production_progress pp 
     JOIN jadwal j    
         ON pp.id_product = j.id_product 
@@ -401,13 +425,50 @@ CROSS JOIN
         AND pp.start_actual > j.tanggal_selesai     
         AND MONTH(j.tanggal_selesai) = MONTH(CURRENT_DATE())     
         AND YEAR(j.tanggal_selesai) = YEAR(CURRENT_DATE())
-) terlambat;
+) terlambat
+
+
+
+/* ================= ON PROGRESS ITEM ================= */
+CROSS JOIN
+(
+    SELECT     
+        COUNT(DISTINCT pp.id_perproduct) AS total_on_progress
+    FROM production_progress pp 
+    WHERE      
+        pp.status = 'On Progress'     
+        AND MONTH(pp.start_actual) = MONTH(CURRENT_DATE())     
+        AND YEAR(pp.start_actual) = YEAR(CURRENT_DATE())
+) on_progress;
           `);
 
     const rows = Array.isArray(result[0]) ? result[0] : result;
     return rows as StatisticRow[];
   } catch (error) {
     console.error("Gagal mengambil data jadwal statistik:", error);
+    return [];
+  }
+}
+
+export async function getOperatorperProduct(): Promise<OperatorProductRow[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT 
+    id_product,
+    product_name,
+    COUNT(*) AS jumlah_tunggu_qc,
+    GROUP_CONCAT(DISTINCT operator_actual_name ORDER BY operator_actual_name SEPARATOR ', ') 
+        AS daftar_operator
+FROM production_progress
+WHERE status = 'Tunggu QC'
+GROUP BY id_product, product_name
+ORDER BY jumlah_tunggu_qc DESC;
+    `);
+
+    const rows = Array.isArray(result[0]) ? result[0] : result;
+    return rows as OperatorProductRow[];
+  } catch (error) {
+    console.error("Gagal mengambil data jadwal:", error);
     return [];
   }
 }

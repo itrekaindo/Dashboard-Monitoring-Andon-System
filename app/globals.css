@@ -125,4 +125,46 @@
 }
 
 @layer utilities {
+  .rolling-text {
+    position: relative;
+    overflow: hidden;
+    height: 20px;
+    display: block;
+    width: 100%;
+  }
+
+  .rolling-text__list {
+    display: block;
+    width: 100%;
+    animation: rolling-text-2 10s ease-in-out infinite;
+  }
+
+  .rolling-text__item {
+    height: 20px;
+    line-height: 20px;
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
+@keyframes rolling-text-2 {
+  0%,
+  45% {
+    transform: translateY(0);
+  }
+  48%,
+  95% {
+    transform: translateY(-20px);
+  }
+  98%,
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rolling-text__list {
+    animation: none;
+  }
 }
