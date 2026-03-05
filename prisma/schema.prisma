@@ -1,0 +1,269 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model andon_line1_lantai3 {
+  id                Int       @id @default(autoincrement())
+  id_project        String?   @db.VarChar(50)
+  id_product        String?   @db.VarChar(50)
+  id_perproduct     String?   @db.VarChar(50)
+  product_name      String?   @db.VarChar(50)
+  timestamps        DateTime? @db.DateTime(0)
+  start_actual      DateTime? @db.Date
+  finish_actual     DateTime? @db.Date
+  operator_assigned Int?
+  operator_rfid     Int?
+  workstation       Int?
+  mtc_status        Int?
+  operator_actual   Int?
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model ideal_time {
+  id            Int?
+  project       String?   @db.VarChar(50)
+  id_product    String?   @db.VarChar(50)
+  product_name  String?   @db.VarChar(50)
+  id_process    String?   @db.VarChar(50)
+  process_name  String?   @db.VarChar(50)
+  workstation   Int?
+  duration_sec  Int?
+  duration_time DateTime? @db.Time(0)
+  percentage    Int?
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model import_material_612 {
+  wbs                   String  @db.VarChar(10)
+  kategori              String  @db.VarChar(20)
+  produk                String  @db.VarChar(30)
+  kode_material         String  @db.VarChar(20)
+  komponen              String  @db.VarChar(170)
+  ts                    Int     @db.TinyInt
+  nama_produk           String  @db.VarChar(40)
+  qty_per_ts            String  @db.VarChar(10)
+  qty_terpenuhi         String? @db.VarChar(10)
+  qty_deviasi           Int?    @db.TinyInt
+  presentase_pemenuhan  String? @db.VarChar(50)
+  status_pemenuhan      String  @db.VarChar(20)
+  ready                 Int?    @db.TinyInt
+  belum_ready           Int?    @db.TinyInt
+  kekurangan_pada_ts    String? @db.VarChar(10)
+  kekurangan_mulai_ts   Int     @db.TinyInt
+  satuan                String  @db.VarChar(10)
+  tgl_datang_terakhir   String? @db.VarChar(50)
+  lokasi_produksi       String? @db.VarChar(10)
+  material_saat_ini     String? @db.VarChar(10)
+  status_ts             String? @db.VarChar(10)
+  komponen_belum_datang String? @db.VarChar(10)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model jadwal {
+  id_product      String?   @db.VarChar(50)
+  project         String?   @db.VarChar(50)
+  trainset        Int?
+  product_name    String?   @db.VarChar(50)
+  jumlah_tiapts   Int?
+  total_personil  Int?
+  line            String?   @db.VarChar(50)
+  workshop        String?   @db.VarChar(50)
+  tanggal_mulai   DateTime? @db.Date
+  tanggal_selesai DateTime? @db.Date
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model log_produksi {
+  timestamps  DateTime? @unique(map: "timestamps") @db.DateTime(0)
+  pic_assy    String?   @db.VarChar(100)
+  pic_qc      String?   @db.VarChar(100)
+  pic_pulling String?   @db.VarChar(100)
+  no_produk   String?   @db.VarChar(100)
+  status      String?   @db.VarChar(100)
+  id_product  String?   @db.VarChar(15)
+  trainset    Int?
+  nama_produk String?   @db.VarChar(25)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model master_jumlah_trainset {
+  id_product         String  @db.VarChar(10)
+  id_kanban          String? @db.VarChar(50)
+  product            String  @db.Text
+  jumlah_pertrainset Int     @db.TinyInt
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model operator {
+  rf_id               Int?
+  nip                 String? @db.VarChar(50)
+  operator_name       String? @db.VarChar(50)
+  unit_kerja          String? @db.VarChar(50)
+  skill_level         Int?
+  work_hours          Int?
+  finish_good_product Int?
+  mtc_handled         Int?
+  oee                 Int?
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model operator_qc {
+  rf_id               Int?
+  nip                 Int?
+  operator_name       String? @db.VarChar(50)
+  unit_kerja          String? @db.VarChar(50)
+  work_hours          Int?
+  finish_good_labeled Int?
+  defect_labeled      Int?
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model operator_scheduled {
+  id                     Int?
+  project_name           String?   @db.VarChar(50)
+  trainset               Int?
+  product_name           String?   @db.VarChar(50)
+  id_product             String?   @db.VarChar(50)
+  id_item                String?   @db.VarChar(50)
+  line                   String?   @db.VarChar(50)
+  workstation            Int?
+  process_name           String?   @db.VarChar(50)
+  operator_nip_assigned  String?   @db.VarChar(50)
+  operator_rfid_assigned Int?
+  operator_name_assigned String?   @db.VarChar(50)
+  date_scheduled         DateTime? @db.Date
+
+  @@ignore
+}
+
+model production_progress {
+  id_process           Int       @id @unique(map: "id_process") @default(autoincrement())
+  id_product           String?   @db.VarChar(50)
+  id_perproduct        String?   @db.VarChar(50)
+  project_name         String?   @db.VarChar(50)
+  product_name         String?   @db.VarChar(50)
+  trainset             Int?
+  line                 String?   @db.VarChar(50)
+  workshop             String?   @db.VarChar(50)
+  process_name         String?   @db.VarChar(50)
+  workstation          Int?
+  operator_actual_rfid Int?
+  operator_actual_name String?   @db.VarChar(50)
+  start_actual         DateTime? @db.DateTime(0)
+  duration_sec_actual  Int?
+  duration_time_actual DateTime? @db.Time(0)
+  status               String?   @db.VarChar(50)
+  finish_actual        DateTime? @db.DateTime(0)
+  note_qc              String?   @db.VarChar(50)
+}
+
+model production_progress_backup {
+  id_process           Int       @id @unique(map: "id_process") @default(autoincrement())
+  id_product           String?   @db.VarChar(50)
+  id_perproduct        String?   @db.VarChar(50)
+  project_name         String?   @db.VarChar(50)
+  product_name         String?   @db.VarChar(50)
+  trainset             Int?
+  line                 String?   @db.VarChar(50)
+  workshop             String?   @db.VarChar(50)
+  process_name         String?   @db.VarChar(50)
+  workstation          Int?
+  operator_actual_rfid Int?
+  operator_actual_name String?   @db.VarChar(50)
+  start_actual         DateTime? @db.DateTime(0)
+  duration_sec_actual  Int?
+  duration_time_actual DateTime? @db.Time(0)
+  status               String?   @db.VarChar(50)
+  finish_actual        DateTime? @db.DateTime(0)
+  note_qc              String?   @db.VarChar(50)
+}
+
+model production_schedule {
+  id                  Int       @id @default(autoincrement())
+  id_project          String?   @db.VarChar(50)
+  id_product          String?   @db.VarChar(50)
+  mppl                DateTime? @db.Date
+  month               String?   @db.VarChar(50)
+  project             String?   @db.VarChar(50)
+  project_client      String?   @db.VarChar(50)
+  batch               Int?
+  trainset            Int?
+  workshop            String?   @db.VarChar(50)
+  line                String?   @db.VarChar(50)
+  product             String?   @db.VarChar(50)
+  production_hours    Int?
+  quantity            Int?
+  start_schedule      DateTime? @db.Date
+  finish_schedule     DateTime? @db.Date
+  qc_schedule         DateTime? @db.Date
+  man_power           Int?
+  islembur            String?   @db.VarChar(50)
+  production_progress String?   @db.VarChar(50)
+  start_actual        DateTime? @db.Date
+  finish_actual       DateTime? @db.Date
+  finish_qc           DateTime? @db.Date
+}
+
+model scada_line1_lantai3 {
+  id               Int       @id @default(autoincrement())
+  waktu_log        DateTime? @default(now()) @db.Timestamp(0)
+  status_ws1       Boolean?
+  status_ws2       Boolean?
+  status_ws3       Boolean?
+  status_ws4       Boolean?
+  status_ws5       Boolean?
+  timer_kerja_ws1  Int?
+  timer_kerja_ws2  Int?
+  timer_kerja_ws3  Int?
+  timer_kerja_ws4  Int?
+  timer_kerja_ws5  Int?
+  timer_kuning_ws1 Int?
+  timer_kuning_ws2 Int?
+  timer_kuning_ws3 Int?
+  timer_kuning_ws4 Int?
+  timer_kuning_ws5 Int?
+  timer_merah_ws1  Int?
+  timer_merah_ws2  Int?
+  timer_merah_ws3  Int?
+  timer_merah_ws4  Int?
+  timer_merah_ws5  Int?
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(GUEST)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("auth_users")
+}
+
+enum Role {
+  ADMIN
+  PENGENDALIAN
+  PERENCANAAN
+  GUEST
+}

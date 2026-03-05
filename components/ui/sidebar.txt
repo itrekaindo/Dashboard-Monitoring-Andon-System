@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, ReactNode, useEffect } from 'react';
-import Image from 'next/image';
+import { useState, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, 
@@ -14,10 +13,8 @@ import {
   LogOut,
   HelpCircle,
   Menu,
-  BellRing,
   X
 } from 'lucide-react';
-import NotificationModal from './NotificationModal';
 
 interface SubmenuItem {
   id: string;
@@ -55,8 +52,8 @@ const MenuItemComponent = ({
   onNavigate,
   toggleSubmenu 
 }: MenuItemProps) => {
-  const isActive = activeMenu === item.id || activeMenu.startsWith(`${item.id}-`);
-  const isExpanded = expandedMenus.includes(item.id) || activeMenu.startsWith(`${item.id}-`);
+  const isActive = activeMenu === item.id;
+  const isExpanded = expandedMenus.includes(item.id);
   const hasSubmenu = item.submenu && item.submenu.length > 0;
 
   const handleClick = () => {
@@ -132,64 +129,6 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(true);
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
-  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
-
-  // Fetch notifications
-  const fetchNotifications = async () => {
-    try {
-      const response = await fetch('/api/notifications/kurang-komponen', {
-        cache: 'no-store',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const newNotifications = data.notifications || [];
-        
-        setNotifications(newNotifications);
-        
-        // Jika modal tidak terbuka, set counter = actual count (bukan increment)
-        if (!isNotificationModalOpen) {
-          setUnreadNotificationCount(newNotifications.length);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
-      setNotifications([]);
-    }
-  };
-
-  // Auto-fetch notifications setiap 1 menit
-  useEffect(() => {
-    fetchNotifications(); // Fetch saat component mount
-    
-    const interval = setInterval(() => {
-      fetchNotifications();
-    }, 60000); // 1 menit
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleNotificationClick = async () => {
-    if (!isNotificationModalOpen) {
-      await fetchNotifications();
-      setUnreadNotificationCount(0); // Reset badge ketika modal dibuka
-    }
-    setIsNotificationModalOpen(!isNotificationModalOpen);
-  };
-
-  const handleLogout = async () => {
-    try {
-      await fetch("/api/logout", { method: "POST" });
-    } finally {
-      router.replace("/login");      // pindah ke login
-      router.refresh();              // pastikan state server/middleware ikut kebaca
-    }
-  };
-
-  const handleMarkAsRead = () => {
-    setUnreadNotificationCount(0);
-  };
 
   // Set active menu based on current pathname
   const getActiveMenu = () => {
@@ -198,9 +137,6 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
     if (pathname.startsWith('/material')) return 'material';
     if (pathname.startsWith('/operator')) return 'operator';
     if (pathname.startsWith('/schedule')) return 'schedule';
-    if (pathname.startsWith('/product-tracking')) return 'product-tracking';
-    if (pathname.startsWith('/production-progress')) return 'production-workstation';
-    if (pathname.startsWith('/production/logs')) return 'production-log';
     if (pathname.startsWith('/settings')) return 'settings';
     return 'dashboard';
   };
@@ -216,7 +152,6 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
   };
 
   const menuItems: MenuItem[] = [
-    /*
     {
       id: 'dashboard',
       label: 'Dashboard',
@@ -229,7 +164,6 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
       icon: Activity,
       path: '/andon-monitoring'
     },
-    */
     {
       id: 'material',
       label: 'Material',
@@ -247,29 +181,6 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
       label: 'Schedule',
       icon: FileText,
       path: '/schedule'
-    },
-    {
-      id: 'product-tracking',
-      label: 'Product Tracking',
-      icon: Search,
-      path: '/product-tracking'
-    },
-    {
-      id: 'production',
-      label: 'Production',
-      icon: Activity,
-      submenu: [
-        {
-          id: 'production-workstation',
-          label: 'Lantai 3',
-          path: '/production-progress/timeline'
-        },
-        {
-          id: 'production-log',
-          label: 'Riwayat Data Kanban',
-          path: '/production/logs'
-        }
-      ]
     }
   ];
 
@@ -285,16 +196,28 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
         `}
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-800/50 flex items-center justify-center">
-          {isOpen ? (
-            <Image src="/assets/logo/logoxreka.png" alt="Andon Logo" width={200} height={60} className="object-contain" />
-          ) : (
-            <Image src="/assets/logo/logoxreka.png" alt="Andon Logo" width={50} height={50} className="object-contain" />
-          )}
+        <div className="p-4 border-b border-gray-800/50">
+          <div className="flex items-center justify-between">
+            {isOpen ? (
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+                  <Activity className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-white font-bold text-lg">Andon System</h1>
+                  <p className="text-gray-400 text-xs">Production Monitor</p>
+                </div>
+              </div>
+            ) : (
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mx-auto shadow-lg shadow-blue-500/30">
+                <Activity className="w-6 h-6 text-white" />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Search Bar */}
-        {isOpen && (
+        {/* {isOpen && (
           <div className="p-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -305,7 +228,7 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
               />
             </div>
           </div>
-        )}
+        )} */}
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
@@ -350,29 +273,18 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
                   AD
                 </div>
                 <div className="flex-1">
-                  <p className="text-white text-sm font-medium">Admin User</p>
-                  <p className="text-gray-400 text-xs">admin@company.com</p>
+                  <p className="text-white text-sm font-medium">Admin PPO</p>
+                  <p className="text-gray-400 text-xs">admin-ppo@ptrekaindo.co.id</p>
                 </div>
               </div>
               <div className="flex gap-2">
-              <button
-                onClick={handleLogout}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-all text-sm"
-              >
-                <LogOut className="w-4 h-4" />
-                Logout
-              </button>
-                <button 
-                  onClick={handleNotificationClick}
-                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-all text-sm relative`}
-                >
-                  <BellRing className="w-4 h-4" />
-                  Notifikasi
-                  {unreadNotificationCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                      {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
-                    </span>
-                  )}
+                <button className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-800 rounded-lg text-gray-300 hover:text-white transition-all text-sm">
+                  <HelpCircle className="w-4 h-4" />
+                  Help
+                </button>
+                <button className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-all text-sm">
+                  <LogOut className="w-4 h-4" />
+                  Logout
                 </button>
               </div>
             </div>
@@ -398,82 +310,39 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto flex flex-col">
-        <div className="flex-1">
-          {children || (
-            <div className="p-8">
-              <div className="mb-8">
-                <h2 className="text-3xl font-bold text-white mb-2">Welcome to Andon Dashboard</h2>
-                <p className="text-gray-400">Sistem monitoring produksi enterprise</p>
-              </div>
-
-              {/* Demo Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6 hover:border-blue-500/50 transition-all">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-                        <Activity className="w-6 h-6 text-white" />
-                      </div>
-                      <span className="px-3 py-1 bg-green-500/10 text-green-400 rounded-full text-xs font-semibold">
-                        Active
-                      </span>
-                    </div>
-                    <h3 className="text-white font-semibold text-lg mb-2">Production Line {i}</h3>
-                    <p className="text-gray-400 text-sm mb-4">Efficiency: 95% | Status: Running</p>
-                    <div className="flex gap-2">
-                      <button className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-all">
-                        View Details
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+      <main className="flex-1 overflow-y-auto">
+        {children || (
+          <div className="p-8">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold text-white mb-2">Welcome to Andon Dashboard</h2>
+              <p className="text-gray-400">Sistem monitoring produksi enterprise</p>
             </div>
-          )}
-        </div>
 
-        {/* Footer */}
-        <footer className="border-t border-gray-800/50 bg-gradient-to-r from-gray-900/70 to-gray-900/50 backdrop-blur-sm">
-          <div className="px-6 py-4">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-              {/* Left: Brand & Copyright */}
-              <div className="flex items-center gap-3">
-                {/* <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
-                  <Activity className="w-4 h-4 text-white" />
-                </div> */}
-                <div className="text-center md:text-left">
-                  <p className="text-gray-300 text-sm font-medium">
-                    © {new Date().getFullYear()}{" "}
-                    <span className="text-white font-bold">PT Rekaindo Global Jasa</span>
-                  </p>
-                  <p className="text-gray-500 text-xs mt-0.5">Production Intelligence Platform</p>
+            {/* Demo Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6 hover:border-blue-500/50 transition-all">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                      <Activity className="w-6 h-6 text-white" />
+                    </div>
+                    <span className="px-3 py-1 bg-green-500/10 text-green-400 rounded-full text-xs font-semibold">
+                      Active
+                    </span>
+                  </div>
+                  <h3 className="text-white font-semibold text-lg mb-2">Production Line {i}</h3>
+                  <p className="text-gray-400 text-sm mb-4">Efficiency: 95% | Status: Running</p>
+                  <div className="flex gap-2">
+                    <button className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-all">
+                      View Details
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              {/* Right: Team & Status */}
-              <div className="flex items-center gap-2">
-                <div className="hidden sm:flex w-1 h-1 rounded-full bg-emerald-400 animate-pulse"></div>
-                <p className="text-gray-500 text-sm">
-                  by{" "}
-                  <span className="text-blue-400 font-semibold flex items-center gap-1 group">
-                    Teknologi Informasi
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 hidden group-hover:inline-block animate-pulse"></span>
-                  </span>
-                </p>
-              </div>
+              ))}
             </div>
           </div>
-        </footer>
+        )}
       </main>
-
-      {/* Notification Modal */}
-      <NotificationModal
-        isOpen={isNotificationModalOpen}
-        notifications={notifications}
-        onClose={() => setIsNotificationModalOpen(false)}
-        onMarkAsRead={handleMarkAsRead}
-      />
     </div>
   );
 };
