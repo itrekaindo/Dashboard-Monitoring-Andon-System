@@ -73,8 +73,8 @@ export default function LoginPage() {
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
-                  type="email"
-                  placeholder="email-anda@ptrekaindo.co.id"
+                  type="text"
+                  placeholder="Masukkan email atau username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
