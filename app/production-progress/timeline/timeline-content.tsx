@@ -444,6 +444,10 @@ export default function TimelineContent({
                       }
                     }
                     
+                    // Jangan tampilkan item yang sudah selesai di To Do column
+                    if (status === 'Selesai') {
+                      return null;
+                    }
 
                     return (
                       <Card key={`todo-${product.id_product}-${idx}`} className="bg-slate-900 border border-slate-700 hover:border-gray-500 transition-colors">

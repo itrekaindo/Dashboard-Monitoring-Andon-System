@@ -98,6 +98,7 @@ SELECT
         WHEN 
             COALESCE(p.jumlah_tunggu_qc,0) = j.jumlah_tiapts
             AND j.trainset = p.trainset
+            AND p.last_progress <= j.tanggal_selesai
         THEN 'Tepat Waktu'
 
         WHEN 
@@ -129,15 +130,15 @@ LEFT JOIN
         id_product,
         trainset,
 
-        SUM(CASE 
-            WHEN status = 'Tunggu QC' THEN 1 
-            ELSE 0 
+        COUNT(DISTINCT CASE 
+            WHEN status = 'Tunggu QC' THEN id_perproduct 
         END) AS jumlah_tunggu_qc,
 
-        SUM(CASE 
-            WHEN status = 'Finish Good' THEN 1 
-            ELSE 0 
-        END) AS jumlah_finish_good
+        COUNT(DISTINCT CASE 
+            WHEN status = 'Finish Good' THEN id_perproduct 
+        END) AS jumlah_finish_good,
+
+        MAX(start_actual) AS last_progress
 
     FROM production_progress
 
@@ -156,11 +157,8 @@ LEFT JOIN ideal_time it
     ON j.id_product = it.id_product
     AND it.process_name = 'total_production_qc'
 
-
 ORDER BY 
     j.tanggal_mulai ASC;
-
-
     `);
 
     const rows = Array.isArray(result[0]) ? result[0] : result;
@@ -415,16 +413,16 @@ CROSS JOIN
 /* ================= TERLAMBAT ITEM ================= */
 CROSS JOIN
 (
-    SELECT     
-        COUNT(DISTINCT pp.id_perproduct) AS total_terlambat_item
-    FROM production_progress pp 
-    JOIN jadwal j    
-        ON pp.id_product = j.id_product 
-    WHERE      
-        pp.status = 'Tunggu QC'     
-        AND pp.start_actual > j.tanggal_selesai     
-        AND MONTH(j.tanggal_selesai) = MONTH(CURRENT_DATE())     
-        AND YEAR(j.tanggal_selesai) = YEAR(CURRENT_DATE())
+SELECT     
+    COUNT(DISTINCT pp.id_perproduct) AS total_terlambat_item
+FROM production_progress pp
+JOIN jadwal j    
+    ON pp.id_product = j.id_product 
+WHERE      
+    pp.status = 'Tunggu QC'     
+    AND pp.start_actual >= DATE_ADD(j.tanggal_selesai, INTERVAL 1 DAY)
+    AND MONTH(j.tanggal_selesai) = MONTH(CURRENT_DATE())     
+    AND YEAR(j.tanggal_selesai) = YEAR(CURRENT_DATE())
 ) terlambat
 
 
