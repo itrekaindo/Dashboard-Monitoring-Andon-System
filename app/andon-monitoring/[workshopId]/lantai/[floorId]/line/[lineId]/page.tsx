@@ -183,7 +183,7 @@ export default async function LinePage({ params }: PageProps) {
             </Link>
             <div className="flex items-center gap-2 text-sm text-gray-400">
               <Link href="/andon-monitoring" className="hover:text-white transition-colors">
-                Andon Monitoring
+                Sistem Informasi Early Warning Terintegrasi (SINERGI)
               </Link>
               <ChevronRight className="w-4 h-4" />
               <Link href={`/andon-monitoring/${workshopId}`} className="hover:text-white transition-colors">
