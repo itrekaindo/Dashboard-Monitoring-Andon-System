@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { JadwalRow, StatisticRow } from "@/lib/queries/jadwal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Filter, Search, Plus, Save, X, Pencil, Trash2, Layers, Eye, EyeOff, Target, Clock, CheckCircle2, AlertTriangle, Activity, Hourglass, AlertCircle, CheckCheck, Package, BookCheck } from "lucide-react";
+import { Calendar, Filter, Search, Plus, Save, X, Pencil, Trash2, Layers, Eye, EyeOff, Target, Clock, CheckCircle2, AlertTriangle, Activity, Hourglass, AlertCircle, CheckCheck, Package, BookCheck, ClipboardList, Timer } from "lucide-react";
 
 type JadwalKey = {
   id_product: string;
@@ -1026,13 +1026,25 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                 </div>
               </div>
 
+              {/* Kekurangan */}
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
+                  <ClipboardList className="w-6 h-6 text-yellow-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-400 truncate">To Do</p>
+                  <p className="text-xl font-bold text-yellow-400">{statistics.total_kekurangan || 0} <span className="text-sm font-normal text-yellow-400/60">Item</span></p>
+                  <p className="text-xs text-yellow-400/70">{Number(statistics.persen_kekurangan || 0).toFixed(0)}%</p>
+                </div>
+              </div>
+
               {/* On Progress */}
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-cyan-500/20 flex items-center justify-center flex-shrink-0">
                   <Activity className="w-6 h-6 text-cyan-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-400 truncate">On Progress</p>
+                  <p className="text-xs text-gray-400 truncate">Assembling</p>
                   <p className="text-xl font-bold text-cyan-400">{statistics.total_on_progress || 0} <span className="text-sm font-normal text-cyan-400/60">Item</span></p>
                   <p className="text-xs text-cyan-400/70">{Number(statistics.persen_on_progress || 0).toFixed(0)}%</p>
                 </div>
@@ -1050,19 +1062,7 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                 </div>
               </div>
 
-              {/* Finish Good */}
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                  <CheckCheck className="w-6 h-6 text-emerald-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-400 truncate">Tepat Waktu</p>
-                  <p className="text-xl font-bold text-emerald-400">{statistics.total_tepat_waktu_item || 0} <span className="text-sm font-normal text-emerald-400/60">Item</span></p>
-                  <p className="text-xs text-emerald-400/70">{Number(statistics.persen_tepat_waktu_item || 0).toFixed(0)}%</p>
-                </div>
-              </div>
-
-              {/* Finish Good */}
+                            {/* Finish Good */}
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
                   <Package className="w-6 h-6 text-emerald-400" />
@@ -1074,29 +1074,31 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                 </div>
               </div>
 
-              {/* Terlambat */}
+              {/* Tepat Waktu */}
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-rose-500/20 flex items-center justify-center flex-shrink-0">
-                  <AlertCircle className="w-6 h-6 text-rose-400" />
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                  <CheckCheck className="w-6 h-6 text-emerald-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-400 truncate">Terlambat</p>
-                  <p className="text-xl font-bold text-rose-400">{statistics.total_terlambat_item || 0} <span className="text-sm font-normal text-rose-400/60">Item</span></p>
-                  <p className="text-xs text-rose-400/70">{Number(statistics.persen_terlambat_item || 0).toFixed(0)}%</p>
+                  <p className="text-xs text-gray-400 truncate">Tepat Waktu</p>
+                  <p className="text-xl font-bold text-emerald-400">{statistics.total_tepat_waktu_item || 0} <span className="text-sm font-normal text-emerald-400/60">Item</span></p>
+                  <p className="text-xs text-emerald-400/70">{Number(statistics.persen_tepat_waktu_item || 0).toFixed(0)}%</p>
                 </div>
               </div>
 
-              {/* Kekurangan */}
+                            {/* Terlambat */}
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
-                  <AlertTriangle className="w-6 h-6 text-red-400" />
+                                <div className="w-12 h-12 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
+                                  <Timer className="w-6 h-6 text-yellow-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-400 truncate">Kekurangan</p>
-                  <p className="text-xl font-bold text-red-400">{statistics.total_kekurangan || 0} <span className="text-sm font-normal text-red-400/60">Item</span></p>
-                  <p className="text-xs text-red-400/70">{Number(statistics.persen_kekurangan || 0).toFixed(0)}%</p>
+                  <p className="text-xs text-gray-400 truncate">Terlambat</p>
+                                  <p className="text-xl font-bold text-yellow-400">{statistics.total_terlambat_item || 0} <span className="text-sm font-normal text-yellow-400/60">Item</span></p>
+                                  <p className="text-xs text-yellow-400/70">{Number(statistics.persen_terlambat_item || 0).toFixed(0)}%</p>
                 </div>
               </div>
+
+
             </div>
           </CardContent>
         </Card>
@@ -1265,7 +1267,6 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                   <th className="text-center p-4 text-gray-300 font-semibold text-sm cursor-pointer hover:bg-gray-800/50 hover:text-white transition-colors" onClick={() => handleSort('jumlah_tiapts')}>Jumlah Tiap TS{getSortIndicator('jumlah_tiapts')}</th>
                   <th className="text-center p-4 text-gray-300 font-semibold text-sm cursor-pointer hover:bg-gray-800/50 hover:text-white transition-colors" onClick={() => handleSort('total_personil')}>Total Personil{getSortIndicator('total_personil')}</th>
                   <th className="text-left p-4 text-gray-300 font-semibold text-sm cursor-pointer hover:bg-gray-800/50 hover:text-white transition-colors" onClick={() => handleSort('line')}>Line{getSortIndicator('line')}</th>
-                  <th className="text-left p-4 text-gray-300 font-semibold text-sm cursor-pointer hover:bg-gray-800/50 hover:text-white transition-colors" onClick={() => handleSort('workshop')}>Workshop{getSortIndicator('workshop')}</th>
                   <th className="text-left p-4 text-gray-300 font-semibold text-sm cursor-pointer hover:bg-gray-800/50 hover:text-white transition-colors" onClick={() => handleSort('tanggal_mulai')}>Tanggal Mulai{getSortIndicator('tanggal_mulai')}</th>
                   <th className="text-left p-4 text-gray-300 font-semibold text-sm cursor-pointer hover:bg-gray-800/50 hover:text-white transition-colors" onClick={() => handleSort('tanggal_selesai')}>Tanggal Selesai{getSortIndicator('tanggal_selesai')}</th>
                   <th className="text-left p-4 text-gray-300 font-semibold text-sm cursor-pointer hover:bg-gray-800/50 hover:text-white transition-colors" onClick={() => handleSort('status')}>Status{getSortIndicator('status')}</th>
@@ -1284,7 +1285,6 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                       <td className="p-4 text-center text-white">{row.jumlah_tiapts ?? "—"}</td>
                       <td className="p-4 text-center text-white">{row.total_personil ?? "—"}</td>
                       <td className="p-4 text-white text-sm">{row.line || "—"}</td>
-                      <td className="p-4 text-white text-sm">{row.workshop || "—"}</td>
                       <td className="p-4 text-gray-300 text-sm">{formatDate(row.tanggal_mulai)}</td>
                       <td className="p-4 text-gray-300 text-sm">{formatDate(row.tanggal_selesai)}</td>
                       <td className="p-4 text-center"><span className={`inline-block px-2 py-1 rounded text-xs font-semibold transition-colors ${getStatusColor(row.status)}`}>{row.status || "—"}</span></td>

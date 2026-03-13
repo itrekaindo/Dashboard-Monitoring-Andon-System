@@ -444,6 +444,10 @@ export default function TimelineContent({
                       }
                     }
                     
+                    // Jangan tampilkan item yang sudah selesai di To Do column
+                    if (status === 'Selesai') {
+                      return null;
+                    }
 
                     return (
                       <Card key={`todo-${product.id_product}-${idx}`} className="bg-slate-900 border border-slate-700 hover:border-gray-500 transition-colors">
@@ -544,13 +548,6 @@ export default function TimelineContent({
                 {cards
                   .filter(card => card.is_completed === 1 && card.status !== 'Finish Good')
                   .map((card, qcIdx) => {
-                    const overtime = card.finish_actual && card.estimated_finish
-                      ? Math.max(0, (new Date(card.finish_actual).getTime() - new Date(card.estimated_finish).getTime()) / 1000)
-                      : 0;
-                    const overtimeLabel = overtime > 0
-                      ? `Overtime +${Math.floor(overtime / 3600)}h:${String(Math.floor((overtime % 3600) / 60)).padStart(2, '0')}m`
-                      : null;
-
                     return (
                       <Card key={`qc-${card.id_product}-${qcIdx}`} className="bg-slate-900 border border-slate-700 hover:border-blue-500 transition-colors">
                         <CardContent className="px-3 py-1">
@@ -560,9 +557,6 @@ export default function TimelineContent({
                               <div className="text-xs text-gray-300 truncate">{card.id_perproduct || card.id_product || "-"}</div>
                               <div className="text-xs text-gray-400 truncate">{card.operator_actual_name || "-"}</div>
                               <Badge className="bg-blue-600 text-white border-0 text-xs">{card.status || "Tunggu QC"}</Badge>
-                              {overtimeLabel && (
-                                <div className="text-sm font-semibold text-rose-400">{overtimeLabel}</div>
-                              )}
                             </div>
                             <div className="flex flex-col gap-0 text-right shrink-0 leading-tight">
                               <div className="text-xs text-gray-400">Estimasi</div>
@@ -595,13 +589,6 @@ export default function TimelineContent({
                 {cards
                   .filter(card => card.status === 'Finish Good')
                   .map((card, fgIdx) => {
-                    const overtime = card.finish_actual && card.estimated_finish
-                      ? Math.max(0, (new Date(card.finish_actual).getTime() - new Date(card.estimated_finish).getTime()) / 1000)
-                      : 0;
-                    const overtimeLabel = overtime > 0
-                      ? `Overtime +${Math.floor(overtime / 3600)}h:${String(Math.floor((overtime % 3600) / 60)).padStart(2, '0')}m`
-                      : null;
-
                     return (
                       <Card key={`finish-${card.id_product}-${fgIdx}`} className="bg-slate-900 border border-slate-700 hover:border-emerald-500 transition-colors">
                        <CardContent className="px-3 py-1">

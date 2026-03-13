@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { LogIn, Mail, Lock, AlertCircle } from "lucide-react";
+import { LogIn, User, Lock, AlertCircle } from "lucide-react";
 import Image from "next/image";
 
 export default function LoginPage() {
@@ -56,9 +56,9 @@ export default function LoginPage() {
               className="object-contain"
             />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">REKA Andon Dashboard Monitoring</h1>
+          <h1 className="text-lg font-bold text-white mb-2 whitespace-nowrap">Sistem Informasi Early Warning Terintegrasi</h1>
           <p className="text-gray-400 text-sm">
-            Sign in to your monitoring dashboard
+            Sign in to your production monitoring dashboard
           </p>
         </div>
 
@@ -69,12 +69,12 @@ export default function LoginPage() {
           <form onSubmit={submit} className="space-y-4">
             {/* Email field */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-400">Email</label>
+              <label className="text-sm font-medium text-gray-400">NIP</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
                   type="text"
-                  placeholder="Masukkan email atau username"
+                  placeholder="Masukkan nomor induk pegawai (NIP)"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required

@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Andon Monitoring Dashboard",
-  description: "Sistem monitoring produksi enterprise",
+  title: "SINERGI",
+  description: "Sistem Informasi Early Warning Terintegrasi",
 };
 
 export default function RootLayout({

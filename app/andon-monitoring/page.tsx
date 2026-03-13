@@ -109,7 +109,7 @@ export default function AndonMonitoring() {
             <div>
               <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
                 <Radio className="w-8 h-8 text-blue-400 animate-pulse" />
-                Andon Monitoring System
+                Sistem Informasi Early Warning Terintegrasi (SINERGI)
               </h1>
               <p className="text-gray-400 flex items-center gap-2">
                 <Activity className="w-4 h-4 animate-pulse text-emerald-400" />

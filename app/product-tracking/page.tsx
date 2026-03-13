@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import ModernSidebar from "@/components/ui/sidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Search, Package, Clock, CheckCircle, AlertCircle, TrendingUp } from "lucide-react";
@@ -38,6 +39,7 @@ interface StatusHistoryEvent {
 }
 
 export default function ProductTrackingPage() {
+  const searchParams = useSearchParams();
   const [trackingIds, setTrackingIds] = useState('');
   const [results, setResults] = useState<TrackingResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,6 +57,7 @@ export default function ProductTrackingPage() {
   const [trainsets, setTrainsets] = useState<number[]>([]);
   const [isLoadingTrainsets, setIsLoadingTrainsets] = useState(false);
   const [statusHistories, setStatusHistories] = useState<{ [key: string]: StatusHistoryEvent[] }>({});
+  const [autoTracked, setAutoTracked] = useState(false);
 
   // Fetch products on mount
   useEffect(() => {
@@ -76,148 +79,6 @@ export default function ProductTrackingPage() {
     fetchProducts();
   }, []);
 
-  // Handle product selection
-  const handleProductSelect = (productName: string) => {
-    setSelectedProduct(productName);
-    setSelectedVariant('');
-    setSelectedSerialNumber('');
-    setSelectedTrainset('');
-    setSerialNumbers([]);
-    setCarVariants([]);
-    setTrainsets([]);
-    const product = products.find(p => p.product_name === productName);
-    if (product) {
-      // Set the id_product to textarea
-      setTrackingIds(product.id_product);
-      setError('');
-      // Fetch car variants for this product
-      fetchCarVariants(product.id_product);
-    }
-  };
-
-  // Fetch car variants from API
-  const fetchCarVariants = async (id_product: string) => {
-    setIsLoadingCarVariants(true);
-    try {
-      const response = await fetch(
-        `/api/product-tracking/car-variants?id_product=${encodeURIComponent(id_product)}`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Car variants:', data.car_variants);
-        setCarVariants(data.car_variants || []);
-      }
-    } catch (err) {
-      console.error('Error fetching car variants:', err);
-    } finally {
-      setIsLoadingCarVariants(false);
-    }
-  };
-
-  // Handle variant selection and fetch serial numbers
-  const handleVariantSelect = (variant: string) => {
-    setSelectedVariant(variant);
-    setSelectedSerialNumber('');
-    setSelectedTrainset('');
-    setSerialNumbers([]);
-    setTrainsets([]);
-    if (selectedProduct) {
-      const product = products.find(p => p.product_name === selectedProduct);
-      if (product) {
-        // Append variant to the id_product with format: /variant-
-        setTrackingIds(`${product.id_product}/${variant}-`);
-        
-        // Fetch serial numbers for this product and variant
-        fetchSerialNumbers(product.id_product, variant);
-      }
-    }
-  };
-
-  // Fetch serial numbers from API
-  const fetchSerialNumbers = async (id_product: string, variant: string) => {
-    setIsLoadingSerialNumbers(true);
-    try {
-      const response = await fetch(
-        `/api/product-tracking/serial-numbers?id_product=${encodeURIComponent(id_product)}&variant=${encodeURIComponent(variant)}`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Serial numbers:', data.serial_numbers);
-        setSerialNumbers(data.serial_numbers || []);
-      }
-    } catch (err) {
-      console.error('Error fetching serial numbers:', err);
-    } finally {
-      setIsLoadingSerialNumbers(false);
-    }
-  };
-
-  // Handle serial number selection
-  const handleSerialNumberSelect = (serialNumber: string) => {
-    setSelectedSerialNumber(serialNumber);
-    setSelectedTrainset('');
-    setTrainsets([]);
-    if (selectedProduct && selectedVariant) {
-      const product = products.find(p => p.product_name === selectedProduct);
-      if (product) {
-        // Format: id_product/variant-serial/
-        setTrackingIds(`${product.id_product}/${selectedVariant}-${serialNumber}/`);
-        
-        // Fetch trainsets for this combination
-        fetchTrainsets(product.id_product, selectedVariant, serialNumber);
-      }
-    }
-  };
-
-  // Fetch trainsets from API
-  const fetchTrainsets = async (id_product: string, variant: string, serial_number: string) => {
-    setIsLoadingTrainsets(true);
-    try {
-      const response = await fetch(
-        `/api/product-tracking/trainsets?id_product=${encodeURIComponent(id_product)}&variant=${encodeURIComponent(variant)}&serial_number=${encodeURIComponent(serial_number)}`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Trainsets:', data.trainsets);
-        setTrainsets(data.trainsets || []);
-      }
-    } catch (err) {
-      console.error('Error fetching trainsets:', err);
-    } finally {
-      setIsLoadingTrainsets(false);
-    }
-  };
-
-  // Handle trainset selection
-  const handleTrainsetSelect = (trainset: string) => {
-    setSelectedTrainset(trainset);
-    if (selectedProduct && selectedVariant && selectedSerialNumber) {
-      const product = products.find(p => p.product_name === selectedProduct);
-      if (product) {
-        // Format: id_product/variant-serial/trainset
-        setTrackingIds(`${product.id_product}/${selectedVariant}-${selectedSerialNumber}/${trainset}`);
-      }
-    }
-  };
-
-  // Get status message based on status
-  const getStatusMessage = (status: string, operatorName: string, noteQc?: string): string => {
-    const statusMap: { [key: string]: string } = {
-      'On Progress': `${operatorName} memulai proses Assembling`,
-      'Tunggu QC': `${operatorName} menyelesaikan proses Assembling`,
-      'Istirahat': `${operatorName} menjeda proses Assembling`,
-      'Pulling': `${operatorName} memulai proses Pulling`,
-      'Kurang Komponen': `${operatorName} melaporkan kekurangan komponen${noteQc ? ' : ' + noteQc : ''}`,
-      'QC Layout': `${operatorName} memulai proses QC Layouting`,
-      'QC Belltest': `${operatorName} memulai proses QC Belltest Koneksi`,
-      'QC Function': `${operatorName} memulai proses QC Function`,
-      'Finish Good': `${operatorName} memverifikasi produk sebagai Finish Good`,
-      'Not OK': `${operatorName} memverifikasi produk sebagai Not OK`,
-    };
-    
-    return statusMap[status] || `${operatorName} - ${status}`;
-  };
-
   // Fetch status history for a product
   const fetchStatusHistory = async (id_perproduct: string) => {
     try {
@@ -236,14 +97,17 @@ export default function ProductTrackingPage() {
     }
   };
 
-  const handleTrack = async () => {
-    if (!trackingIds.trim()) {
+  // Handle tracking
+  const handleTrack = useCallback(async (overrideId?: string) => {
+    const idToTrack = overrideId || trackingIds;
+    
+    if (!idToTrack.trim()) {
       setError('Masukkan ID Produk untuk dilacak');
       return;
     }
 
     // Split by comma or newline, max 10 items
-    const ids = trackingIds
+    const ids = idToTrack
       .split(/[,\n]/)
       .map(id => id.trim())
       .filter(id => id.length > 0)
@@ -289,6 +153,157 @@ export default function ProductTrackingPage() {
     } finally {
       setIsLoading(false);
     }
+  }, [trackingIds]);
+
+  // Handle URL parameter from QR code
+  useEffect(() => {
+    const qParam = searchParams.get('q');
+    if (qParam && !autoTracked) {
+      setTrackingIds(qParam);
+      setAutoTracked(true);
+      // Trigger tracking immediately with the parameter value
+      handleTrack(qParam);
+    }
+  }, [searchParams, autoTracked, handleTrack]);
+
+  // Handle product selection
+  const handleProductSelect = (productName: string) => {
+    setSelectedProduct(productName);
+    setSelectedTrainset('');
+    setSelectedVariant('');
+    setSelectedSerialNumber('');
+    setTrainsets([]);
+    setCarVariants([]);
+    setSerialNumbers([]);
+    const product = products.find(p => p.product_name === productName);
+    if (product) {
+      // Set the id_product to textarea
+      setTrackingIds(product.id_product);
+      setError('');
+      // Fetch trainsets for this product
+      fetchTrainsetsForProduct(product.id_product);
+    }
+  };
+
+  // Fetch trainsets for product
+  const fetchTrainsetsForProduct = async (id_product: string) => {
+    setIsLoadingTrainsets(true);
+    try {
+      const response = await fetch(
+        `/api/product-tracking/trainsets-by-product?id_product=${encodeURIComponent(id_product)}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Trainsets:', data.trainsets);
+        setTrainsets(data.trainsets || []);
+      }
+    } catch (err) {
+      console.error('Error fetching trainsets:', err);
+    } finally {
+      setIsLoadingTrainsets(false);
+    }
+  };
+
+  // Fetch car variants from API (filtered by trainset)
+  const fetchCarVariants = async (id_product: string, trainset: string) => {
+    setIsLoadingCarVariants(true);
+    try {
+      const response = await fetch(
+        `/api/product-tracking/car-variants?id_product=${encodeURIComponent(id_product)}&trainset=${encodeURIComponent(trainset)}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Car variants:', data.car_variants);
+        setCarVariants(data.car_variants || []);
+      }
+    } catch (err) {
+      console.error('Error fetching car variants:', err);
+    } finally {
+      setIsLoadingCarVariants(false);
+    }
+  };
+
+  // Handle trainset selection
+  const handleTrainsetSelect = (trainset: string) => {
+    setSelectedTrainset(trainset);
+    setSelectedVariant('');
+    setSelectedSerialNumber('');
+    setCarVariants([]);
+    setSerialNumbers([]);
+    if (selectedProduct) {
+      const product = products.find(p => p.product_name === selectedProduct);
+      if (product) {
+        setTrackingIds(product.id_product);
+        // Fetch car variants for this trainset
+        fetchCarVariants(product.id_product, trainset);
+      }
+    }
+  };
+
+  // Handle variant selection and fetch serial numbers
+  const handleVariantSelect = (variant: string) => {
+    setSelectedVariant(variant);
+    setSelectedSerialNumber('');
+    setSerialNumbers([]);
+    if (selectedProduct && selectedTrainset) {
+      const product = products.find(p => p.product_name === selectedProduct);
+      if (product) {
+        // Append variant to the id_product with format: /variant-
+        setTrackingIds(`${product.id_product}/${variant}-`);
+        
+        // Fetch serial numbers for this product, variant, and trainset
+        fetchSerialNumbers(product.id_product, variant, selectedTrainset);
+      }
+    }
+  };
+
+  // Fetch serial numbers from API (filtered by trainset)
+  const fetchSerialNumbers = async (id_product: string, variant: string, trainset: string) => {
+    setIsLoadingSerialNumbers(true);
+    try {
+      const response = await fetch(
+        `/api/product-tracking/serial-numbers?id_product=${encodeURIComponent(id_product)}&variant=${encodeURIComponent(variant)}&trainset=${encodeURIComponent(trainset)}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Serial numbers:', data.serial_numbers);
+        setSerialNumbers(data.serial_numbers || []);
+      }
+    } catch (err) {
+      console.error('Error fetching serial numbers:', err);
+    } finally {
+      setIsLoadingSerialNumbers(false);
+    }
+  };
+
+  // Handle serial number selection
+  const handleSerialNumberSelect = (serialNumber: string) => {
+    setSelectedSerialNumber(serialNumber);
+    if (selectedProduct && selectedVariant && selectedTrainset) {
+      const product = products.find(p => p.product_name === selectedProduct);
+      if (product) {
+        // Format: id_product/variant-serial/trainset (trainset di akhir)
+        setTrackingIds(`${product.id_product}/${selectedVariant}-${serialNumber}/${selectedTrainset}`);
+      }
+    }
+  };
+
+  // Get status message based on status
+  const getStatusMessage = (status: string, operatorName: string, noteQc?: string): string => {
+    const statusMap: { [key: string]: string } = {
+      'On Progress': `${operatorName} memulai proses Assembling`,
+      'Tunggu QC': `${operatorName} menyelesaikan proses Assembling`,
+      'Istirahat': `${operatorName} menjeda proses Assembling`,
+      'Pulling': `${operatorName} memulai proses Pulling`,
+      'Kurang Komponen': `${operatorName} melaporkan kekurangan komponen${noteQc ? ' : ' + noteQc : ''}`,
+      'QC Layout': `${operatorName} memulai proses QC Layouting`,
+      'QC Belltest': `${operatorName} memulai proses QC Belltest Koneksi`,
+      'QC Function': `${operatorName} memulai proses QC Function`,
+      'Finish Good': `${operatorName} memverifikasi produk sebagai Finish Good`,
+      'Not OK': `${operatorName} memverifikasi produk sebagai Not OK`,
+    };
+    
+    return statusMap[status] || `${operatorName} - ${status}`;
   };
 
   const getStatusColor = (status?: string) => {
@@ -381,7 +396,7 @@ export default function ProductTrackingPage() {
         <Card className="bg-gray-800/50 border border-gray-700/60 backdrop-blur-sm">
           <CardContent className="p-6 space-y-6">
             
-            {/* Product & Variant & Serial Number & Trainset Dropdowns */}
+            {/* Product & Trainset & Variant & Serial Number Dropdowns */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Product Dropdown */}
               <div className="space-y-2">
@@ -409,7 +424,45 @@ export default function ProductTrackingPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-gray-500">
-                  Pilih produk untuk mengisi ID secara otomatis
+                  Langkah 1: Pilih produk terlebih dahulu
+                </p>
+              </div>
+
+              {/* Trainset Dropdown */}
+              <div className="space-y-2">
+                <label className="text-white font-semibold text-sm">
+                  Pilih Trainset
+                </label>
+                <Select 
+                  value={selectedTrainset} 
+                  onValueChange={handleTrainsetSelect}
+                  disabled={!selectedProduct || isLoadingTrainsets || trainsets.length === 0}
+                >
+                  <SelectTrigger className="w-full bg-gray-900/60 border-gray-700 text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                    <SelectValue placeholder={
+                      !selectedProduct 
+                        ? "Pilih produk terlebih dahulu"
+                        : isLoadingTrainsets
+                        ? "Memuat trainset..."
+                        : trainsets.length === 0
+                        ? "Tidak ada trainset"
+                        : "Pilih trainset..."
+                    } />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-900 border-gray-700">
+                    {trainsets.map((trainset) => (
+                      <SelectItem 
+                        key={trainset} 
+                        value={trainset.toString()}
+                        className="text-white hover:bg-gray-800"
+                      >
+                        {trainset}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500">
+                  Langkah 2: Pilih trainset
                 </p>
               </div>
 
@@ -421,12 +474,12 @@ export default function ProductTrackingPage() {
                 <Select 
                   value={selectedVariant} 
                   onValueChange={handleVariantSelect}
-                  disabled={!selectedProduct || isLoadingCarVariants || carVariants.length === 0}
+                  disabled={!selectedTrainset || isLoadingCarVariants || carVariants.length === 0}
                 >
                   <SelectTrigger className="w-full bg-gray-900/60 border-gray-700 text-white disabled:opacity-50 disabled:cursor-not-allowed">
                     <SelectValue placeholder={
-                      !selectedProduct 
-                        ? "Pilih produk terlebih dahulu"
+                      !selectedTrainset 
+                        ? "Pilih trainset terlebih dahulu"
                         : isLoadingCarVariants
                         ? "Memuat jenis car..."
                         : carVariants.length === 0
@@ -447,7 +500,7 @@ export default function ProductTrackingPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-gray-500">
-                  Jenis car akan ditambahkan ke ID
+                  Langkah 3: Pilih jenis car
                 </p>
               </div>
 
@@ -485,45 +538,7 @@ export default function ProductTrackingPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-gray-500">
-                  Serial number akan ditambahkan ke ID
-                </p>
-              </div>
-
-              {/* Trainset Dropdown */}
-              <div className="space-y-2">
-                <label className="text-white font-semibold text-sm">
-                  Pilih Trainset
-                </label>
-                <Select 
-                  value={selectedTrainset} 
-                  onValueChange={handleTrainsetSelect}
-                  disabled={!selectedSerialNumber || isLoadingTrainsets || trainsets.length === 0}
-                >
-                  <SelectTrigger className="w-full bg-gray-900/60 border-gray-700 text-white disabled:opacity-50 disabled:cursor-not-allowed">
-                    <SelectValue placeholder={
-                      !selectedSerialNumber 
-                        ? "Pilih serial number terlebih dahulu"
-                        : isLoadingTrainsets
-                        ? "Memuat trainset..."
-                        : trainsets.length === 0
-                        ? "Tidak ada trainset"
-                        : "Pilih trainset..."
-                    } />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-900 border-gray-700">
-                    {trainsets.map((trainset) => (
-                      <SelectItem 
-                        key={trainset} 
-                        value={trainset.toString()}
-                        className="text-white hover:bg-gray-800"
-                      >
-                        {trainset}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-gray-500">
-                  Trainset akan ditambahkan ke ID
+                  Langkah 4: Pilih serial number
                 </p>
               </div>
             </div>
@@ -540,6 +555,10 @@ export default function ProductTrackingPage() {
                 className="w-full px-4 py-2 bg-gray-900/60 border border-gray-700 rounded-lg text-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
                 rows={2}
               />
+              <p className="text-xs text-gray-500 flex items-center gap-1">
+                <span>💡</span>
+                Tip: Anda dapat Scan QR code atau scan barcode menggunakan scanner untuk pelacakan otomatis
+              </p>
             </div>
 
             {error && (
@@ -550,7 +569,7 @@ export default function ProductTrackingPage() {
             )}
 
             <button
-              onClick={handleTrack}
+              onClick={() => handleTrack()}
               disabled={isLoading}
               className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-lg transition-all shadow-lg shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
