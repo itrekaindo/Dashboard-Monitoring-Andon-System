@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ModernSidebar from "@/components/ui/sidebar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,7 +38,7 @@ interface StatusHistoryEvent {
   workstation?: number;
 }
 
-export default function ProductTrackingPage() {
+function ProductTrackingContent() {
   const searchParams = useSearchParams();
   const [trackingIds, setTrackingIds] = useState('');
   const [results, setResults] = useState<TrackingResult[]>([]);
@@ -830,5 +830,25 @@ export default function ProductTrackingPage() {
       </div>
     </div>
     </ModernSidebar>
+  );
+}
+
+export default function ProductTrackingPage() {
+  return (
+    <Suspense
+      fallback={
+        <ModernSidebar>
+          <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6 sm:p-8">
+            <div className="max-w-6xl mx-auto">
+              <Card className="bg-gray-800/50 border border-gray-700/60 backdrop-blur-sm">
+                <CardContent className="p-6 text-gray-300">Memuat halaman pelacakan produk...</CardContent>
+              </Card>
+            </div>
+          </div>
+        </ModernSidebar>
+      }
+    >
+      <ProductTrackingContent />
+    </Suspense>
   );
 }
