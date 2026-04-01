@@ -48,13 +48,12 @@ export default function LoginPage() {
         {/* Logo / Brand */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <Image
-              src="/assets/logo/logoxreka.png"
-              alt="Logo"
-              width={180}
-              height={54}
-              className="object-contain"
-            />
+            <Image 
+              src="/assets/logo/logoxreka.png" 
+              alt="Andon Logo" 
+              width={200} 
+              height={60} 
+              className="object-contain" />
           </div>
           <h1 className="text-lg font-bold text-white mb-2 whitespace-nowrap">Sistem Informasi Early Warning Terintegrasi</h1>
           <p className="text-gray-400 text-sm">
