@@ -455,7 +455,7 @@ export default function TimelineContent({
                           <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
                             <div className="space-y-0.5 min-w-0 leading-tight">
                               <div className="text-sm font-semibold text-white truncate">{product.product_name || "-"}</div>
-                              <div className="text-xs text-gray-300 truncate">{product.id_product || "-"}</div>
+                              <div className="text-xs text-gray-300 truncate">Trainset {product.trainset ?? "-"}</div>
                               <div className="text-xs text-gray-400 truncate">Personil: {product.total_personil || "-"}</div>
                               <Badge className={`border-0 text-xs font-semibold ${statusBg} text-white`}>
                                 {status}

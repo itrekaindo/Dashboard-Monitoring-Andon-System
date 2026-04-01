@@ -1013,6 +1013,7 @@ LEFT JOIN
     (
         SELECT 
             id_product, 
+      trainset,
             -- Hitung Tunggu QC
             SUM(CASE WHEN status = 'Tunggu QC' THEN 1 ELSE 0 END) AS jumlah_tunggu_qc,
             -- Hitung Finish Good
@@ -1022,9 +1023,10 @@ LEFT JOIN
             -- Filter: Hanya ambil progress yang start_actual-nya bulan ini
             MONTH(start_actual) = MONTH(CURRENT_DATE()) 
             AND YEAR(start_actual) = YEAR(CURRENT_DATE())
-        GROUP BY id_product
+          GROUP BY id_product, trainset
     ) p 
     ON j.id_product = p.id_product
+        AND j.trainset = p.trainset
 WHERE 
     -- Filter: Hanya ambil jadwal yang tanggal_mulai-nya bulan ini
     MONTH(j.tanggal_mulai) = MONTH(CURRENT_DATE()) 
