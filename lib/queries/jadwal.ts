@@ -30,16 +30,40 @@ export interface StatisticRow {
   total_kekurangan: number | null;
   total_on_progress: number | null;
   total_waiting_list: number | null;
-  total_terlambat_item: number | null;
+  total_terlambat: number | null;
   persen_tunggu_qc: number | null;
   persen_finish_good: number | null;
   persen_kekurangan: number | null;
   persen_on_progress: number | null;
   persen_waiting_list: number | null;
-  persen_terlambat_item: number | null;
-  total_tepat_waktu_item: number | null;
-  persen_tepat_waktu_item: number | null;
+  persen_terlambat: number | null;
+  total_tepat_waktu: number | null;
+  persen_tepat_waktu: number | null;
+  total_kurang_komponen: number | null;
+  persen_kurang_komponen: number | null;
+  total_not_ok: number | null;
+  persen_not_ok: number | null;
 }
+
+export interface DashboardLantai3Row {
+  trainset: number | null;
+    jumlah_selesai: number | null;
+    persen_selesai: number | null;
+    jumlah_not_ok: number | null;
+    persen_not_ok: number | null;
+    jumlah_kurang_komponen: number | null;
+    persen_kurang_komponen: number | null;
+    jumlah_terlambat: number | null;
+    persen_terlambat: number | null;
+  total_on_progress: number | null;
+  persen_on_progress: number | null;
+    diff_persen_selesai: number | null;
+    diff_persen_not_ok: number | null;
+    diff_persen_kurang_komponen: number | null;
+    diff_persen_terlambat: number | null;
+    diff_persen_on_progress: number | null;
+}
+
 
 export interface OperatorProductRow {
   id_product: string | null;
@@ -190,7 +214,9 @@ SELECT
         THEN start_actual
       END) AS finish_actual,
 
-  RIGHT(SUBSTRING_INDEX(id_perproduct, '/', -1), 2) AS trainset,
+  CAST(
+    RIGHT(SUBSTRING_INDEX(id_perproduct, '/', -1), 2)
+AS UNSIGNED) AS trainset,
   
   SUM(CASE 
         WHEN status = 'Finish Good' THEN 1 
@@ -215,229 +241,249 @@ ORDER BY start_actual ASC;
   }
 }
 
-export async function getScheduleStatistics(): Promise<StatisticRow[]> {
+export async function getScheduleStatistics(monthYear?: string): Promise<StatisticRow[]> {
   try {
+        const now = new Date();
+        let targetYear = now.getFullYear();
+        let targetMonth = now.getMonth() + 1;
+
+        if (monthYear && /^\d{4}-\d{2}$/.test(monthYear)) {
+            const [yearText, monthText] = monthYear.split("-");
+            const parsedYear = Number(yearText);
+            const parsedMonth = Number(monthText);
+
+            if (
+                Number.isFinite(parsedYear) &&
+                Number.isFinite(parsedMonth) &&
+                parsedMonth >= 1 &&
+                parsedMonth <= 12
+            ) {
+                targetYear = parsedYear;
+                targetMonth = parsedMonth;
+            }
+        }
+
     const result = await db.execute(sql`
 SELECT
 
     /* ================= KPI GLOBAL ================= */
 
-    MAX(target.total_target_ts)      AS total_target_ts,
-    MAX(qc_global.total_tunggu_qc)  AS total_tunggu_qc,
-    MAX(fg.total_finish_good)       AS total_finish_good,
+    target.total_target_ts,
+    qc_global.total_tunggu_qc,
+    fg.total_finish_good,
 
-    /* ===== KEKURANGAN ===== */
     GREATEST(
-        MAX(target.total_target_ts) - 
-        MAX(qc_global.total_tunggu_qc),
+        target.total_target_ts - qc_global.total_tunggu_qc,
         0
     ) AS total_kekurangan,
 
 
     /* ================= STATUS ================= */
 
-    MAX(on_progress.total_on_progress)
-        AS total_on_progress,
+    on_progress.total_on_progress,
 
     ROUND(
-        MAX(on_progress.total_on_progress)
-        / MAX(target.total_target_ts) * 100,
+        on_progress.total_on_progress / target.total_target_ts * 100,
         0
     ) AS persen_on_progress,
 
-    SUM(CASE WHEN status = 'Waiting List' THEN 1 ELSE 0 END) 
-        AS total_waiting_list,
+    waiting_list.total_waiting_list,
 
 
-    /* ================= TEPAT WAKTU ITEM ================= */
+    /* ================= TEPAT WAKTU ================= */
 
-    MAX(tepat_waktu.total_tepat_waktu_item)
-        AS total_tepat_waktu_item,
+    tepat_waktu.total_tepat_waktu,
 
     ROUND(
-        MAX(tepat_waktu.total_tepat_waktu_item)
-        / MAX(target.total_target_ts) * 100,
+        tepat_waktu.total_tepat_waktu / target.total_target_ts * 100,
         0
-    ) AS persen_tepat_waktu_item,
+    ) AS persen_tepat_waktu,
 
 
-    /* ================= TERLAMBAT ITEM (BARU) ================= */
+    /* ================= TERLAMBAT ================= */
 
-    MAX(terlambat.total_terlambat_item)
-        AS total_terlambat_item,
+    terlambat.total_terlambat,
 
     ROUND(
-        MAX(terlambat.total_terlambat_item)
-        / MAX(target.total_target_ts) * 100,
+        terlambat.total_terlambat / target.total_target_ts * 100,
         0
-    ) AS persen_terlambat_item,
+    ) AS persen_terlambat,
 
 
-    /* ================= PERSENTASE PROGRESS ================= */
+    /* ================= KURANG KOMPONEN ================= */
+
+    kurang_komponen.total_kurang_komponen,
 
     ROUND(
-        MAX(qc_global.total_tunggu_qc)
-        / MAX(target.total_target_ts) * 100,
+        kurang_komponen.total_kurang_komponen / target.total_target_ts * 100,
+        0
+    ) AS persen_kurang_komponen,
+
+
+    /* ================= NOT OK ================= */
+
+    not_ok.total_not_ok,
+
+    ROUND(
+        not_ok.total_not_ok / target.total_target_ts * 100,
+        0
+    ) AS persen_not_ok,
+
+
+    /* ================= PROGRESS ================= */
+
+    ROUND(
+        qc_global.total_tunggu_qc / target.total_target_ts * 100,
         0
     ) AS persen_tunggu_qc,
 
     ROUND(
-        MAX(fg.total_finish_good)
-        / MAX(target.total_target_ts) * 100,
+        fg.total_finish_good / target.total_target_ts * 100,
         0
     ) AS persen_finish_good,
 
     ROUND(
         GREATEST(
-            MAX(target.total_target_ts) - 
-            MAX(qc_global.total_tunggu_qc),
+            target.total_target_ts - qc_global.total_tunggu_qc,
             0
-        )
-        / MAX(target.total_target_ts) * 100,
+        ) / target.total_target_ts * 100,
         0
-    ) AS persen_kekurangan,
-
-    SUM(CASE WHEN status = 'On Progress' THEN 1 ELSE 0 END) 
-        AS persen_waiting_list
+    ) AS persen_kekurangan
 
 
 
 FROM
-(
-    /* ================= STATUS PER JADWAL ================= */
-    SELECT 
 
-        j.id_product,
-
-        COALESCE(p.jumlah_tunggu_qc,0) AS qc_per_product,
-
-        CASE
-
-            /* Waiting List */
-            WHEN 
-                MONTH(j.tanggal_selesai) <> MONTH(CURRENT_DATE())
-                OR YEAR(j.tanggal_selesai) <> YEAR(CURRENT_DATE())
-            THEN 'Waiting List'
-            
-            /* On Progress */
-            WHEN 
-                MONTH(j.tanggal_selesai) = MONTH(CURRENT_DATE())
-                AND YEAR(j.tanggal_selesai) = YEAR(CURRENT_DATE())
-                AND COALESCE(p.jumlah_tunggu_qc,0) = 0
-            THEN 'On Progress'
-
-            ELSE 'On Progress'  
-                
-        END AS status
-
-    FROM jadwal j
-
-    LEFT JOIN
-    (
-        SELECT 
-            id_product,
-            SUM(status = 'Tunggu QC') AS jumlah_tunggu_qc
-        FROM production_progress
-        GROUP BY id_product
-    ) p
-        ON j.id_product = p.id_product
-
-    WHERE EXISTS (
-        SELECT 1
-        FROM production_progress pp_month
-        WHERE pp_month.id_product = j.id_product
-          AND MONTH(pp_month.start_actual) = MONTH(CURRENT_DATE())
-          AND YEAR(pp_month.start_actual) = YEAR(CURRENT_DATE())
-    )
-
-) status_data
-
-
-
-/* ================= TARGET TS ================= */
-CROSS JOIN
+/* ================= TARGET ================= */
 (
     SELECT 
         SUM(jumlah_tiapts) AS total_target_ts
-    FROM jadwal
-    WHERE 
-        MONTH(tanggal_selesai) = MONTH(CURRENT_DATE())
-        AND YEAR(tanggal_selesai) = YEAR(CURRENT_DATE())
+    FROM (
+        SELECT DISTINCT j.id_product, j.trainset, j.jumlah_tiapts
+        FROM jadwal j
+        WHERE 
+            MONTH(j.tanggal_selesai) = ${targetMonth}
+            AND YEAR(j.tanggal_selesai) = ${targetYear}
+    ) t
 ) target
 
 
 
-/* ================= QC GLOBAL ================= */
+/* ================= QC ================= */
 CROSS JOIN
 (
     SELECT 
-        SUM(status = 'Tunggu QC') AS total_tunggu_qc
-    FROM production_progress
+        COUNT(DISTINCT pp.id_perproduct) AS total_tunggu_qc
+    FROM production_progress pp
     WHERE 
-        MONTH(start_actual) = MONTH(CURRENT_DATE())
-        AND YEAR(start_actual) = YEAR(CURRENT_DATE())
+        pp.status = 'Tunggu QC'
+        AND MONTH(pp.start_actual) = ${targetMonth}
+        AND YEAR(pp.start_actual) = ${targetYear}
 ) qc_global
 
 
 
-/* ================= FINISH GOOD ================= */
+/* ================= FG ================= */
 CROSS JOIN
 (
     SELECT  
-        SUM(status = 'Finish Good') AS total_finish_good
-    FROM production_progress
+        COUNT(DISTINCT pp.id_perproduct) AS total_finish_good
+    FROM production_progress pp
     WHERE 
-        MONTH(start_actual) = MONTH(CURRENT_DATE())
-        AND YEAR(start_actual) = YEAR(CURRENT_DATE())
+        pp.status = 'Finish Good'
+        AND MONTH(pp.start_actual) = ${targetMonth}
+        AND YEAR(pp.start_actual) = ${targetYear}
 ) fg
 
 
 
-/* ================= TEPAT WAKTU ITEM ================= */
+/* ================= ON PROGRESS ================= */
 CROSS JOIN
 (
     SELECT     
-        COUNT(DISTINCT pp.id_perproduct) AS total_tepat_waktu_item
+        COUNT(DISTINCT pp.id_perproduct) AS total_on_progress
+    FROM production_progress pp
+    WHERE      
+        pp.status = 'On Progress'     
+        AND MONTH(pp.start_actual) = ${targetMonth}     
+        AND YEAR(pp.start_actual) = ${targetYear}
+) on_progress
+
+
+
+/* ================= WAITING LIST ================= */
+CROSS JOIN
+(
+    SELECT     
+        COUNT(DISTINCT j.id_product, j.trainset) AS total_waiting_list
+    FROM jadwal j
+    WHERE 
+        (MONTH(j.tanggal_selesai) <> ${targetMonth} OR YEAR(j.tanggal_selesai) <> ${targetYear})
+) waiting_list
+
+
+
+/* ================= TEPAT WAKTU ================= */
+CROSS JOIN
+(
+    SELECT     
+        COUNT(DISTINCT pp.id_perproduct) AS total_tepat_waktu
     FROM production_progress pp 
     JOIN jadwal j    
         ON pp.id_product = j.id_product 
+        AND pp.trainset = j.trainset
     WHERE      
         pp.status = 'Tunggu QC'     
-        AND MONTH(pp.start_actual) = MONTH(CURRENT_DATE())     
-        AND YEAR(pp.start_actual) = YEAR(CURRENT_DATE())
+        AND MONTH(pp.start_actual) = ${targetMonth}     
+        AND YEAR(pp.start_actual) = ${targetYear}
         AND pp.start_actual <= j.tanggal_selesai     
 ) tepat_waktu
 
 
 
-/* ================= TERLAMBAT ITEM ================= */
+/* ================= TERLAMBAT ================= */
 CROSS JOIN
 (
-SELECT     
-    COUNT(DISTINCT pp.id_perproduct) AS total_terlambat_item
-FROM production_progress pp
-JOIN jadwal j    
-    ON pp.id_product = j.id_product 
-WHERE      
-    pp.status = 'Tunggu QC'     
-    AND pp.start_actual >= DATE_ADD(j.tanggal_selesai, INTERVAL 1 DAY)
-    AND MONTH(j.tanggal_selesai) = MONTH(CURRENT_DATE())     
-    AND YEAR(j.tanggal_selesai) = YEAR(CURRENT_DATE())
+    SELECT     
+        COUNT(DISTINCT pp.id_perproduct) AS total_terlambat
+    FROM production_progress pp
+    JOIN jadwal j    
+        ON pp.id_product = j.id_product 
+        AND pp.trainset = j.trainset
+    WHERE      
+        pp.status = 'Tunggu QC'     
+        AND pp.start_actual > j.tanggal_selesai
+        AND MONTH(j.tanggal_selesai) = ${targetMonth}     
+        AND YEAR(j.tanggal_selesai) = ${targetYear}
 ) terlambat
 
 
 
-/* ================= ON PROGRESS ITEM ================= */
+/* ================= KURANG KOMPONEN ================= */
 CROSS JOIN
 (
     SELECT     
-        COUNT(DISTINCT pp.id_perproduct) AS total_on_progress
-    FROM production_progress pp 
+        COUNT(DISTINCT pp.id_perproduct) AS total_kurang_komponen
+    FROM production_progress pp
     WHERE      
-        pp.status = 'On Progress'     
-        AND MONTH(pp.start_actual) = MONTH(CURRENT_DATE())     
-        AND YEAR(pp.start_actual) = YEAR(CURRENT_DATE())
-) on_progress;
+        pp.status = 'Kurang Komponen'     
+        AND MONTH(pp.start_actual) = ${targetMonth}    
+        AND YEAR(pp.start_actual) = ${targetYear}
+) kurang_komponen
+
+
+
+/* ================= NOT OK ================= */
+CROSS JOIN
+(
+    SELECT     
+        COUNT(DISTINCT pp.id_perproduct) AS total_not_ok
+    FROM production_progress pp
+    WHERE      
+        pp.status = 'Not OK'     
+        AND MONTH(pp.start_actual) = ${targetMonth}    
+        AND YEAR(pp.start_actual) = ${targetYear}
+) not_ok;
           `);
 
     const rows = Array.isArray(result[0]) ? result[0] : result;
@@ -465,6 +511,137 @@ ORDER BY jumlah_tunggu_qc DESC;
 
     const rows = Array.isArray(result[0]) ? result[0] : result;
     return rows as OperatorProductRow[];
+  } catch (error) {
+    console.error("Gagal mengambil data jadwal:", error);
+    return [];
+  }
+}
+
+export async function getLantai3Dashboard(): Promise<DashboardLantai3Row[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT
+    q.*,
+
+    /* ================= DIFF PERSEN ================= */
+    q.persen_selesai 
+        - LAG(q.persen_selesai) OVER (ORDER BY q.trainset)
+        AS diff_persen_selesai,
+
+    q.persen_not_ok 
+        - LAG(q.persen_not_ok) OVER (ORDER BY q.trainset)
+        AS diff_persen_not_ok,
+
+    q.persen_kurang_komponen 
+        - LAG(q.persen_kurang_komponen) OVER (ORDER BY q.trainset)
+        AS diff_persen_kurang_komponen,
+
+    q.persen_terlambat 
+        - LAG(q.persen_terlambat) OVER (ORDER BY q.trainset)
+        AS diff_persen_terlambat,
+
+    q.persen_on_progress 
+        - LAG(q.persen_on_progress) OVER (ORDER BY q.trainset)
+        AS diff_persen_on_progress
+
+FROM (
+
+    /* ================= QUERY KAMU (TIDAK DIUBAH) ================= */
+    SELECT
+        pp.trainset,
+
+        COUNT(DISTINCT CASE 
+            WHEN pp.status = 'Tunggu QC' 
+            THEN pp.id_perproduct
+        END) AS jumlah_selesai,
+
+        ROUND(
+            COUNT(DISTINCT CASE 
+                WHEN pp.status = 'Tunggu QC' 
+                THEN pp.id_perproduct
+            END) * 100 / 60
+        ,0) AS persen_selesai,
+
+        COUNT(DISTINCT CASE 
+            WHEN pp.status = 'Not OK' 
+            THEN pp.id_perproduct
+        END) AS jumlah_not_ok,
+
+        ROUND(
+            COUNT(DISTINCT CASE 
+                WHEN pp.status = 'Not OK' 
+                THEN pp.id_perproduct
+            END) * 100 / 60
+        ,0) AS persen_not_ok,
+
+        COUNT(DISTINCT CASE 
+            WHEN pp.status = 'Kurang Komponen'
+            THEN pp.id_perproduct
+        END) AS jumlah_kurang_komponen,
+
+        ROUND(
+            COUNT(DISTINCT CASE 
+                WHEN pp.status = 'Kurang Komponen'
+                THEN pp.id_perproduct
+            END) * 100 / 60
+        ,0) AS persen_kurang_komponen,
+
+        COALESCE(MAX(tl.jumlah_terlambat), 0) AS jumlah_terlambat,
+
+        ROUND(
+            COALESCE(MAX(tl.jumlah_terlambat), 0) * 100 / 60
+        ,0) AS persen_terlambat,
+
+        COALESCE(MAX(op.total_on_progress), 0) AS total_on_progress,
+
+        ROUND(
+            COALESCE(MAX(op.total_on_progress), 0) * 100 / 60
+        ,0) AS persen_on_progress
+
+    FROM production_progress pp
+
+    LEFT JOIN jadwal j 
+        ON pp.id_product = j.id_product
+
+    LEFT JOIN (
+        SELECT
+            pp.trainset,
+            COUNT(DISTINCT pp.id_perproduct) AS jumlah_terlambat
+        FROM production_progress pp
+        JOIN jadwal j    
+            ON pp.id_product = j.id_product 
+        WHERE      
+            pp.status = 'Tunggu QC'     
+            AND pp.start_actual >= DATE_ADD(j.tanggal_selesai, INTERVAL 1 DAY)
+        GROUP BY 
+            pp.trainset
+    ) tl ON tl.trainset = pp.trainset
+
+    LEFT JOIN (
+        SELECT
+            pp.trainset,
+            COUNT(DISTINCT pp.id_perproduct) AS total_on_progress
+        FROM production_progress pp
+        WHERE      
+            pp.status = 'On Progress'
+        GROUP BY 
+            pp.trainset
+    ) op ON op.trainset = pp.trainset
+
+    WHERE 
+        pp.start_actual IS NOT NULL
+
+    GROUP BY 
+        pp.trainset
+
+) q
+
+ORDER BY 
+    q.trainset;
+    `);
+
+    const rows = Array.isArray(result[0]) ? result[0] : result;
+    return rows as DashboardLantai3Row[];
   } catch (error) {
     console.error("Gagal mengambil data jadwal:", error);
     return [];

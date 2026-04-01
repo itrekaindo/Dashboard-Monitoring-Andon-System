@@ -3,9 +3,12 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const statistics = await getScheduleStatistics();
+    const { searchParams } = new URL(request.url);
+    const monthYear = searchParams.get("monthYear") || undefined;
+
+    const statistics = await getScheduleStatistics(monthYear);
     return NextResponse.json(statistics);
   } catch (error) {
     console.error("Error fetching schedule statistics:", error);

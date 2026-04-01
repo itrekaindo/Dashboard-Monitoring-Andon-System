@@ -358,7 +358,12 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
 
     const fetchStatistics = async () => {
       try {
-        const response = await fetch("/api/schedule/statistics");
+        const statisticsUrl =
+          monthYearFilter !== "all"
+            ? `/api/schedule/statistics?monthYear=${encodeURIComponent(monthYearFilter)}`
+            : "/api/schedule/statistics";
+
+        const response = await fetch(statisticsUrl);
         if (!response.ok) throw new Error("Gagal mengambil data statistik");
         const data = await response.json();
         
@@ -378,7 +383,7 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
     return () => {
       isMounted = false;
     };
-  }, [rows]); // Refetch when rows change
+  }, [rows, monthYearFilter]); // Refetch when rows or month-year filter change
 
   // Auto-refresh data on page load
   useEffect(() => {
@@ -912,7 +917,10 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                               {/* Progress Bar Overlay */}
                               {showProgressBar && (() => {
                                 const progressBars: React.ReactNode[] = [];
-                                const processItems = processBarData.filter((item) => item.id_product === row.id_product);
+                                const processItems = processBarData.filter((item) => 
+                                  item.id_product === row.id_product && 
+                                  item.trainset === row.trainset
+                                );
                                 const dayInMs = 1000 * 60 * 60 * 24;
                                 const visibleRangeStart = selectedMonthRange ? selectedMonthRange.start : minDate;
                                 const visibleRangeEnd = selectedMonthRange ? selectedMonthRange.end : maxDate;
@@ -940,6 +948,7 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                                   });
 
                                 const barNumberById = new Map<string, number>();
+
                                 processItemsInRange.forEach((item) => {
                                   const id = (item.id_perproduct || '').trim();
                                   if (!id) return;
@@ -973,11 +982,11 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                                     const barNumber = processItem.id_perproduct
                                       ? (barNumberById.get(processItem.id_perproduct) || pIdx + 1)
                                       : pIdx + 1;
-                                    const hoverText = `ID: ${idProd}\nOperator: ${operatorName}\n${processItem.product_name || '-'}\nStart: ${formatDate(startDate)}\nFinish: ${formatDate(finishDate)}`;
+                                    const hoverText = `ID: ${idProd}\nTrainset: ${processItem.trainset ?? row.trainset ?? '-'}\nOperator: ${operatorName}\n${processItem.product_name || '-'}\nStart: ${formatDate(startDate)}\nFinish: ${formatDate(finishDate)}`;
                                     
                                     progressBars.push(
                                       <div
-                                        key={`progress-${row.id_product}-${pIdx}`}
+                                        key={`progress-${row.id_product}-${row.trainset}-${pIdx}`}
                                         className="absolute bg-emerald-500/30 hover:bg-emerald-400/60 transition-all cursor-pointer rounded flex items-center justify-center"
                                         style={{
                                           left: `${progressLeftPercent}%`,
@@ -1013,14 +1022,14 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
       {statistics && (
         <Card className="bg-gray-800/50 border border-gray-700/50">
           <CardContent className="p-6 overflow-x-auto">
-            <div className="grid grid-cols-7 gap-4 min-w-max">
+            <div className="grid grid-flow-col grid-rows-1 auto-cols-[minmax(180px,1fr)] gap-2 min-w-max">
               {/* Target Total TS */}
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-gray-500/20 flex items-center justify-center flex-shrink-0">
                   <Target className="w-6 h-6 text-gray-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-400 truncate">Total 1 TS</p>
+                  <p className="text-xs text-gray-400 truncate">Total</p>
                   <p className="text-xl font-bold text-white">{statistics.total_target_ts || 0} <span className="text-sm font-normal text-gray-400">Item</span></p>
                   <p className="text-xs text-gray-500">Bulan ini</p>
                 </div>
@@ -1081,8 +1090,8 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 truncate">Tepat Waktu</p>
-                  <p className="text-xl font-bold text-emerald-400">{statistics.total_tepat_waktu_item || 0} <span className="text-sm font-normal text-emerald-400/60">Item</span></p>
-                  <p className="text-xs text-emerald-400/70">{Number(statistics.persen_tepat_waktu_item || 0).toFixed(0)}%</p>
+                  <p className="text-xl font-bold text-emerald-400">{statistics.total_tepat_waktu || 0} <span className="text-sm font-normal text-emerald-400/60">Item</span></p>
+                  <p className="text-xs text-emerald-400/70">{Number(statistics.persen_tepat_waktu || 0).toFixed(0)}%</p>
                 </div>
               </div>
 
@@ -1093,8 +1102,20 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 truncate">Terlambat</p>
-                                  <p className="text-xl font-bold text-yellow-400">{statistics.total_terlambat_item || 0} <span className="text-sm font-normal text-yellow-400/60">Item</span></p>
-                                  <p className="text-xs text-yellow-400/70">{Number(statistics.persen_terlambat_item || 0).toFixed(0)}%</p>
+                                  <p className="text-xl font-bold text-yellow-400">{statistics.total_terlambat || 0} <span className="text-sm font-normal text-yellow-400/60">Item</span></p>
+                                  <p className="text-xs text-yellow-400/70">{Number(statistics.persen_terlambat || 0).toFixed(0)}%</p>
+                </div>
+              </div>
+
+              {/* Kurang Komponen */}
+              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                                  <AlertTriangle className="w-6 h-6 text-red-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-400 truncate">Kurang Komponen</p>
+                                  <p className="text-xl font-bold text-red-400">{statistics.total_kurang_komponen || 0} <span className="text-sm font-normal text-red-400/60">Item</span></p>
+                                  <p className="text-xs text-red-400/70">{Number(statistics.persen_kurang_komponen || 0).toFixed(0)}%</p>
                 </div>
               </div>
 

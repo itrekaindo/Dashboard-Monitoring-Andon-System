@@ -196,7 +196,8 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
     if (pathname === '/') return 'dashboard';
     if (pathname.startsWith('/andon-monitoring')) return 'andon-monitoring';
     if (pathname.startsWith('/material')) return 'material';
-    if (pathname.startsWith('/operator')) return 'operator';
+    if (pathname === '/operator' || pathname.startsWith('/operator/')) return 'operator-profile';
+    if (pathname.startsWith('/penugasan-operator')) return 'operator-assignment';
     if (pathname.startsWith('/schedule')) return 'schedule';
     if (pathname.startsWith('/product-tracking')) return 'product-tracking';
     if (pathname.startsWith('/production-progress')) return 'production-workstation';
@@ -216,13 +217,14 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
   };
 
   const menuItems: MenuItem[] = [
-    /*
+    
     {
       id: 'dashboard',
       label: 'Dashboard',
       icon: LayoutDashboard,
       path: '/'
     },
+    /*
     {
       id: 'andon-monitoring',
       label: 'Andon Monitoring',
@@ -240,7 +242,18 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
       id: 'operator',
       label: 'Operator',
       icon: Users,
-      path: '/operator'
+      submenu: [
+        {
+          id: 'operator-profile',
+          label: 'Operator Profile',
+          path: '/operator'
+        },
+        {
+          id: 'operator-assignment',
+          label: 'Penugasan Operator',
+          path: '/penugasan-operator'
+        }
+      ]
     },
     {
       id: 'schedule',
@@ -256,7 +269,7 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
     },
     {
       id: 'production',
-      label: 'Production',
+      label: 'Live Production',
       icon: Activity,
       submenu: [
         {
