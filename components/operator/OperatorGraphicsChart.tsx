@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Chart } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import {
@@ -11,6 +11,7 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  BarController,
   Title,
   Tooltip,
   Legend,
@@ -20,6 +21,7 @@ ChartJS.register(
   CategoryScale,
   LinearScale,
   BarElement,
+  BarController,
   Title,
   Tooltip,
   Legend,
@@ -218,7 +220,7 @@ export default function OperatorGraphicsChart({ data }: OperatorGraphicsChartPro
       </CardHeader>
       <CardContent>
         <div className="h-[360px] w-full">
-          <Chart type="bar" data={chartData} options={options} />
+          <Bar data={chartData} options={options} />
         </div>
       </CardContent>
     </Card>
