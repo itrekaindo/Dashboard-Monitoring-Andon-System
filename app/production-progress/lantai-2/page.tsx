@@ -21,13 +21,13 @@ import {
   type OperatorStats,
   type AbnormalProgress,
 } from "@/lib/queries/production-progress";
-import TimelineContent from "./timeline-content";
+import TimelineContent from "../timeline/timeline-content";
 
 export const dynamic = "force-dynamic";
 
-export default async function TimelinePage({ searchParams }: { searchParams: Promise<{ [k: string]: string | string[] | undefined }> }) {
+export default async function Lantai2Page({ searchParams }: { searchParams: Promise<{ [k: string]: string | string[] | undefined }> }) {
   const resolvedSearchParams = await searchParams;
-  const lineLabel = "Lantai 3";
+  const lineLabel = "Lantai 2";
   const emptyStats = {
     total_processes: 0,
     completed: 0,
@@ -62,7 +62,7 @@ export default async function TimelinePage({ searchParams }: { searchParams: Pro
       getAbnormalProgress(7, lineLabel),
     ]);
   } catch (error) {
-    console.error("[TimelinePage] Failed to fetch initial data:", error);
+    console.error("[Lantai2Page] Failed to fetch initial data:", error);
   }
 
   const forcedStepRaw = Array.isArray(resolvedSearchParams?.current)

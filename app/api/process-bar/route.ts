@@ -1,8 +1,10 @@
-import { getProcessBar } from "@/lib/queries/jadwal";
+import { getProcessBarByLine } from "@/lib/queries/jadwal";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const data = await getProcessBar();
+    const { searchParams } = new URL(request.url);
+    const line = searchParams.get("line") || "Lantai 3";
+    const data = await getProcessBarByLine(line);
     return Response.json({ success: true, data });
   } catch (error) {
     console.error("API Error:", error);

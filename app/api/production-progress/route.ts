@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import {
-  getProductionStats,
-  getWorkstationStats,
-  getRecentProductionProgress,
+  getProductionStatsLantai3,
+  getWorkstationStatsLantai3,
+  getRecentProductionProgressLantai3,
   getProductionProgressByWorkshop,
   getProductionProgressByLine,
   searchProductionProgress,
@@ -22,8 +22,8 @@ export async function GET(request: Request) {
 
     // Fetch base stats in parallel
     const [stats, workstationStats] = await Promise.all([
-      getProductionStats(),
-      getWorkstationStats(),
+      getProductionStatsLantai3(),
+      getWorkstationStatsLantai3(),
     ]);
 
     // Fetch recent list with optional filters
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     } else if (line) {
       list = await getProductionProgressByLine(line);
     } else {
-      list = await getRecentProductionProgress(limit);
+      list = await getRecentProductionProgressLantai3(limit);
     }
 
     // Trim if search returns more than needed

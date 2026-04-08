@@ -7,8 +7,9 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const monthYear = searchParams.get("monthYear") || undefined;
+    const line = searchParams.get("line") || "Lantai 3";
 
-    const statistics = await getScheduleStatistics(monthYear);
+    const statistics = await getScheduleStatistics(monthYear, line);
     return NextResponse.json(statistics);
   } catch (error) {
     console.error("Error fetching schedule statistics:", error);

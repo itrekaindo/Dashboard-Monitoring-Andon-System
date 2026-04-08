@@ -198,8 +198,12 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
     if (pathname.startsWith('/material')) return 'material';
     if (pathname === '/operator' || pathname.startsWith('/operator/')) return 'operator-profile';
     if (pathname.startsWith('/penugasan-operator')) return 'operator-assignment';
-    if (pathname.startsWith('/schedule')) return 'schedule';
+    if (pathname.startsWith('/schedule/lantai-1')) return 'schedule-lantai1';
+    if (pathname.startsWith('/schedule/lantai-2')) return 'schedule-lantai2';
+    if (pathname.startsWith('/schedule')) return 'schedule-lantai3';
     if (pathname.startsWith('/product-tracking')) return 'product-tracking';
+    if (pathname.startsWith('/production-progress/lantai-1')) return 'production-lantai1';
+    if (pathname.startsWith('/production-progress/lantai-2')) return 'production-lantai2';
     if (pathname.startsWith('/production-progress')) return 'production-workstation';
     if (pathname.startsWith('/production/logs')) return 'production-log';
     if (pathname.startsWith('/settings')) return 'settings';
@@ -259,7 +263,23 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
       id: 'schedule',
       label: 'Schedule',
       icon: FileText,
-      path: '/schedule'
+      submenu: [
+        {
+          id: 'schedule-lantai3',
+          label: 'Lantai 3 Candisewu',
+          path: '/schedule'
+        },
+        {
+          id: 'schedule-lantai2',
+          label: 'Lantai 2 Candisewu',
+          path: '/schedule/lantai-2'
+        },
+        {
+          id: 'schedule-lantai1',
+          label: 'Lantai 1 Candisewu',
+          path: '/schedule/lantai-1'
+        }
+      ]
     },
     {
       id: 'product-tracking',
@@ -274,8 +294,18 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
       submenu: [
         {
           id: 'production-workstation',
-          label: 'Lantai 3',
+          label: 'Lantai 3 Candisewu',
           path: '/production-progress/timeline'
+        },
+        {
+          id: 'production-lantai2',
+          label: 'Lantai 2 Candisewu',
+          path: '/production-progress/lantai-2'
+        },
+        {
+          id: 'production-lantai1',
+          label: 'Lantai 1 Candisewu',
+          path: '/production-progress/lantai-1'
         },
         {
           id: 'production-log',

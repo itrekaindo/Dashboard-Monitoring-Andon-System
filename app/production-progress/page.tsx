@@ -15,12 +15,12 @@ import {
   Users,
 } from "lucide-react";
 import {
-  getProductionStats,
-  getWorkstationStats,
-  getRecentProductionProgress,
+  getWorkstationStatsLantai3,
+  getRecentProductionProgressLantai3,
   type ProductionStats,
   type WorkstationStats,
   type ProductionProgress,
+  getProductionStatsLantai3,
 } from "@/lib/queries/production-progress";
 
 function formatDateTime(value: Date | string | null) {
@@ -49,9 +49,9 @@ export const dynamic = "force-dynamic";
 export default async function ProductionProgressDashboard() {
   // Fetch server-side so data stays up-to-date on load
   const [stats, workstationStats, recent] = await Promise.all([
-    getProductionStats(),
-    getWorkstationStats(),
-    getRecentProductionProgress(20),
+    getProductionStatsLantai3(),
+    getWorkstationStatsLantai3(),
+    getRecentProductionProgressLantai3(20),
   ]) as [ProductionStats, WorkstationStats[], ProductionProgress[]];
 
   const cards = [

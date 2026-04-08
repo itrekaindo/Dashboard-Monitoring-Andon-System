@@ -207,7 +207,7 @@ function getProductColorByFloor(line: string | null): string {
   if (searchText.includes('lantai 3') || searchText.includes('lt 3') || searchText.includes('lt3')) {
     return 'bg-blue-500'; // Lantai 3 - Biru
   } else if (searchText.includes('lantai 2') || searchText.includes('lt 2') || searchText.includes('lt2')) {
-    return 'bg-emerald-500'; // Lantai 2 - Hijau
+    return 'bg-amber-700'; // Lantai 2 - Tembaga/Kabel
   } else if (searchText.includes('lantai 1') || searchText.includes('lt 1') || searchText.includes('lt1')) {
     return 'bg-purple-500'; // Lantai 1 - Ungu
   }
@@ -260,7 +260,7 @@ function buildHolidayUrl(year: number) {
   return `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(holidayCalendarId)}/events?${params.toString()}`;
 }
 
-export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[] }) {
+export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }: { initialRows: JadwalRow[]; selectedLine?: string }) {
   // Get current month-year as default filter
   const getCurrentMonthYear = () => {
     const now = new Date();
@@ -328,7 +328,7 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
     // Fetch process bar data
     const fetchProcessBar = async () => {
       try {
-        const response = await fetch("/api/process-bar");
+        const response = await fetch(`/api/process-bar?line=${encodeURIComponent(selectedLine)}`);
         if (!response.ok) throw new Error("Gagal mengambil data progress bar");
         const result = await response.json();
         console.log("Process Bar Data:", result);
@@ -360,8 +360,8 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
       try {
         const statisticsUrl =
           monthYearFilter !== "all"
-            ? `/api/schedule/statistics?monthYear=${encodeURIComponent(monthYearFilter)}`
-            : "/api/schedule/statistics";
+            ? `/api/schedule/statistics?monthYear=${encodeURIComponent(monthYearFilter)}&line=${encodeURIComponent(selectedLine)}`
+            : `/api/schedule/statistics?line=${encodeURIComponent(selectedLine)}`;
 
         const response = await fetch(statisticsUrl);
         if (!response.ok) throw new Error("Gagal mengambil data statistik");
@@ -383,7 +383,7 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
     return () => {
       isMounted = false;
     };
-  }, [rows, monthYearFilter]); // Refetch when rows or month-year filter change
+  }, [rows, monthYearFilter, selectedLine]); // Refetch when rows or month-year filter change
 
   // Auto-refresh data on page load
   useEffect(() => {
@@ -457,7 +457,7 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
   const refreshRows = async () => {
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/jadwal", { cache: "no-store" });
+      const response = await fetch(`/api/jadwal?line=${encodeURIComponent(selectedLine)}`, { cache: "no-store" });
       if (!response.ok) throw new Error("Gagal mengambil data jadwal");
       const data = await response.json();
       setRows(Array.isArray(data.rows) ? data.rows : []);
@@ -745,7 +745,7 @@ export default function JadwalClient({ initialRows }: { initialRows: JadwalRow[]
                     <div className="flex items-center gap-3 flex-wrap">
                       {uniqueFloors.map((floor) => {
                         const floorColor = floor === 'Lantai 3' ? 'bg-blue-500' : 
-                                          floor === 'Lantai 2' ? 'bg-emerald-500' : 
+                                          floor === 'Lantai 2' ? 'bg-amber-700' : 
                                           floor === 'Lantai 1' ? 'bg-purple-500' : 'bg-gray-500';
                         return (
                           <div key={floor} className="flex items-center gap-2">

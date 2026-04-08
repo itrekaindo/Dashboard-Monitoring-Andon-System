@@ -1,6 +1,14 @@
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 
+function getProductionProgressTableByLine(line?: string) {
+    const normalizedLine = (line ?? '').trim().toLowerCase();
+    const tableName = normalizedLine === 'lantai 1' || normalizedLine === 'lantai 2'
+        ? 'production_progress_protrack'
+        : 'production_progress';
+    return sql.raw(tableName);
+}
+
 export interface JadwalRow {
   id_product: string | null;
   product_name: string | null;
@@ -89,10 +97,11 @@ export async function getAllJadwal(): Promise<JadwalRow[]> {
 }
 */
 
-export async function getAllJadwalStatus(): Promise<JadwalRow[]> {
+export async function getTabelJadwalByLine(line: string): Promise<JadwalRow[]> {
   try {
+        const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
-SELECT 
+SELECT  
     j.id_product, 
     j.product_name,
     j.project,
@@ -164,7 +173,7 @@ LEFT JOIN
 
         MAX(start_actual) AS last_progress
 
-    FROM production_progress
+    FROM ${progressTable}
 
     WHERE 
         MONTH(start_actual) = MONTH(CURRENT_DATE()) 
@@ -175,11 +184,13 @@ LEFT JOIN
     ON j.id_product = p.id_product
     AND j.trainset = p.trainset
 
-
 /* ================= IDEAL TIME ================= */
 LEFT JOIN ideal_time it
     ON j.id_product = it.id_product
     AND it.process_name = 'total_production_qc'
+
+/* ================= FILTER ================= */
+WHERE j.line = ${line}
 
 ORDER BY 
     j.tanggal_mulai ASC;
@@ -193,8 +204,29 @@ ORDER BY
   }
 }
 
-export async function getProcessBar(): Promise<JadwalRow[]> {
+export async function getTabelJadwalLantai3(): Promise<JadwalRow[]> {
+    return getTabelJadwalByLine('Lantai 3');
+}
+
+export async function getTabelJadwalLantai2(): Promise<JadwalRow[]> {
+    return getTabelJadwalByLine('Lantai 2');
+}
+
+export async function getTabelJadwalLantai1(): Promise<JadwalRow[]> {
+    return getTabelJadwalByLine('Lantai 1');
+}
+
+export async function getProcessBarLantai2(): Promise<JadwalRow[]> {
+    return getTabelJadwalByLine('Lantai 2');
+}
+
+export async function getProcessBarLantai1(): Promise<JadwalRow[]> {
+    return getTabelJadwalByLine('Lantai 1');
+}
+
+export async function getProcessBarByLine(line: string): Promise<JadwalRow[]> {
   try {
+        const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
 SELECT
   id_product,
@@ -216,20 +248,23 @@ SELECT
 
   CAST(
     RIGHT(SUBSTRING_INDEX(id_perproduct, '/', -1), 2)
-AS UNSIGNED) AS trainset,
+  AS UNSIGNED) AS trainset,
   
   SUM(CASE 
         WHEN status = 'Finish Good' THEN 1 
         ELSE 0 
       END) AS jumlah_finish_good
 
-FROM production_progress
+FROM ${progressTable}
 
-WHERE status IN ('On Progress', 'Tunggu QC', 'Finish Good')
+WHERE 
+  status IN ('On Progress', 'Tunggu QC', 'Finish Good')
+    AND line = ${line}
 
 GROUP BY
   id_product,
   id_perproduct
+
 ORDER BY start_actual ASC;
     `);
 
@@ -241,8 +276,15 @@ ORDER BY start_actual ASC;
   }
 }
 
-export async function getScheduleStatistics(monthYear?: string): Promise<StatisticRow[]> {
+export async function getProcessBarLantai3(): Promise<JadwalRow[]> {
+    return getProcessBarByLine('Lantai 3');
+}
+
+
+
+export async function getScheduleStatistics(monthYear?: string, line: string = 'Lantai 3'): Promise<StatisticRow[]> {
   try {
+    const progressTable = getProductionProgressTableByLine(line);
         const now = new Date();
         let targetYear = now.getFullYear();
         let targetMonth = now.getMonth() + 1;
@@ -277,7 +319,6 @@ SELECT
         0
     ) AS total_kekurangan,
 
-
     /* ================= STATUS ================= */
 
     on_progress.total_on_progress,
@@ -289,7 +330,6 @@ SELECT
 
     waiting_list.total_waiting_list,
 
-
     /* ================= TEPAT WAKTU ================= */
 
     tepat_waktu.total_tepat_waktu,
@@ -298,7 +338,6 @@ SELECT
         tepat_waktu.total_tepat_waktu / target.total_target_ts * 100,
         0
     ) AS persen_tepat_waktu,
-
 
     /* ================= TERLAMBAT ================= */
 
@@ -309,7 +348,6 @@ SELECT
         0
     ) AS persen_terlambat,
 
-
     /* ================= KURANG KOMPONEN ================= */
 
     kurang_komponen.total_kurang_komponen,
@@ -319,7 +357,6 @@ SELECT
         0
     ) AS persen_kurang_komponen,
 
-
     /* ================= NOT OK ================= */
 
     not_ok.total_not_ok,
@@ -328,7 +365,6 @@ SELECT
         not_ok.total_not_ok / target.total_target_ts * 100,
         0
     ) AS persen_not_ok,
-
 
     /* ================= PROGRESS ================= */
 
@@ -351,7 +387,6 @@ SELECT
     ) AS persen_kekurangan
 
 
-
 FROM
 
 /* ================= TARGET ================= */
@@ -364,52 +399,48 @@ FROM
         WHERE 
             MONTH(j.tanggal_selesai) = ${targetMonth}
             AND YEAR(j.tanggal_selesai) = ${targetYear}
+            AND j.line = ${line}
     ) t
 ) target
-
-
 
 /* ================= QC ================= */
 CROSS JOIN
 (
     SELECT 
         COUNT(DISTINCT pp.id_perproduct) AS total_tunggu_qc
-    FROM production_progress pp
+    FROM ${progressTable} pp
     WHERE 
         pp.status = 'Tunggu QC'
         AND MONTH(pp.start_actual) = ${targetMonth}
         AND YEAR(pp.start_actual) = ${targetYear}
+        AND pp.line = ${line}
 ) qc_global
-
-
 
 /* ================= FG ================= */
 CROSS JOIN
 (
     SELECT  
         COUNT(DISTINCT pp.id_perproduct) AS total_finish_good
-    FROM production_progress pp
+    FROM ${progressTable} pp
     WHERE 
         pp.status = 'Finish Good'
         AND MONTH(pp.start_actual) = ${targetMonth}
         AND YEAR(pp.start_actual) = ${targetYear}
+        AND pp.line = ${line}
 ) fg
-
-
 
 /* ================= ON PROGRESS ================= */
 CROSS JOIN
 (
     SELECT     
         COUNT(DISTINCT pp.id_perproduct) AS total_on_progress
-    FROM production_progress pp
+    FROM ${progressTable} pp
     WHERE      
         pp.status = 'On Progress'     
         AND MONTH(pp.start_actual) = ${targetMonth}     
         AND YEAR(pp.start_actual) = ${targetYear}
+        AND pp.line = ${line}
 ) on_progress
-
-
 
 /* ================= WAITING LIST ================= */
 CROSS JOIN
@@ -419,16 +450,15 @@ CROSS JOIN
     FROM jadwal j
     WHERE 
         (MONTH(j.tanggal_selesai) <> ${targetMonth} OR YEAR(j.tanggal_selesai) <> ${targetYear})
+        AND j.line = ${line}
 ) waiting_list
-
-
 
 /* ================= TEPAT WAKTU ================= */
 CROSS JOIN
 (
     SELECT     
         COUNT(DISTINCT pp.id_perproduct) AS total_tepat_waktu
-    FROM production_progress pp 
+    FROM ${progressTable} pp 
     JOIN jadwal j    
         ON pp.id_product = j.id_product 
         AND pp.trainset = j.trainset
@@ -436,17 +466,16 @@ CROSS JOIN
         pp.status = 'Tunggu QC'     
         AND MONTH(pp.start_actual) = ${targetMonth}     
         AND YEAR(pp.start_actual) = ${targetYear}
-        AND pp.start_actual <= j.tanggal_selesai     
+        AND pp.start_actual <= j.tanggal_selesai
+        AND j.line = ${line}
 ) tepat_waktu
-
-
 
 /* ================= TERLAMBAT ================= */
 CROSS JOIN
 (
     SELECT     
         COUNT(DISTINCT pp.id_perproduct) AS total_terlambat
-    FROM production_progress pp
+    FROM ${progressTable} pp
     JOIN jadwal j    
         ON pp.id_product = j.id_product 
         AND pp.trainset = j.trainset
@@ -455,23 +484,21 @@ CROSS JOIN
         AND pp.start_actual > j.tanggal_selesai
         AND MONTH(j.tanggal_selesai) = ${targetMonth}     
         AND YEAR(j.tanggal_selesai) = ${targetYear}
+        AND j.line = ${line}
 ) terlambat
-
-
 
 /* ================= KURANG KOMPONEN ================= */
 CROSS JOIN
 (
     SELECT     
         COUNT(DISTINCT pp.id_perproduct) AS total_kurang_komponen
-    FROM production_progress pp
+    FROM ${progressTable} pp
     WHERE      
         pp.status = 'Kurang Komponen'     
         AND MONTH(pp.start_actual) = ${targetMonth}    
         AND YEAR(pp.start_actual) = ${targetYear}
+        AND pp.line = ${line}
 ) kurang_komponen
-
-
 
 /* ================= NOT OK ================= */
 CROSS JOIN
@@ -483,6 +510,7 @@ CROSS JOIN
         pp.status = 'Not OK'     
         AND MONTH(pp.start_actual) = ${targetMonth}    
         AND YEAR(pp.start_actual) = ${targetYear}
+        AND pp.line = ${line}
 ) not_ok;
           `);
 
@@ -492,6 +520,18 @@ CROSS JOIN
     console.error("Gagal mengambil data jadwal statistik:", error);
     return [];
   }
+}
+
+export async function getScheduleStatisticsLantai3(monthYear?: string): Promise<StatisticRow[]> {
+    return getScheduleStatistics(monthYear, 'Lantai 3');
+}
+
+export async function getScheduleStatisticsLantai2(monthYear?: string): Promise<StatisticRow[]> {
+    return getScheduleStatistics(monthYear, 'Lantai 2');
+}
+
+export async function getScheduleStatisticsLantai1(monthYear?: string): Promise<StatisticRow[]> {
+    return getScheduleStatistics(monthYear, 'Lantai 1');
 }
 
 export async function getOperatorperProduct(): Promise<OperatorProductRow[]> {
@@ -517,8 +557,10 @@ ORDER BY jumlah_tunggu_qc DESC;
   }
 }
 
-export async function getLantai3Dashboard(): Promise<DashboardLantai3Row[]> {
+
+export async function getLantai3Dashboard(line: string = 'Lantai 3'): Promise<DashboardLantai3Row[]> {
   try {
+        const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
 SELECT
     q.*,
@@ -546,7 +588,6 @@ SELECT
 
 FROM (
 
-    /* ================= QUERY KAMU (TIDAK DIUBAH) ================= */
     SELECT
         pp.trainset,
 
@@ -598,38 +639,45 @@ FROM (
             COALESCE(MAX(op.total_on_progress), 0) * 100 / 60
         ,0) AS persen_on_progress
 
-    FROM production_progress pp
+    FROM ${progressTable} pp
 
     LEFT JOIN jadwal j 
         ON pp.id_product = j.id_product
+        AND pp.trainset = j.trainset
 
+    /* ================= TERLAMBAT ================= */
     LEFT JOIN (
         SELECT
             pp.trainset,
             COUNT(DISTINCT pp.id_perproduct) AS jumlah_terlambat
-        FROM production_progress pp
+        FROM ${progressTable} pp
         JOIN jadwal j    
             ON pp.id_product = j.id_product 
+            AND pp.trainset = j.trainset
         WHERE      
             pp.status = 'Tunggu QC'     
             AND pp.start_actual >= DATE_ADD(j.tanggal_selesai, INTERVAL 1 DAY)
+            AND j.line = ${line}
         GROUP BY 
             pp.trainset
     ) tl ON tl.trainset = pp.trainset
 
+    /* ================= ON PROGRESS ================= */
     LEFT JOIN (
         SELECT
             pp.trainset,
             COUNT(DISTINCT pp.id_perproduct) AS total_on_progress
-        FROM production_progress pp
+        FROM ${progressTable} pp
         WHERE      
             pp.status = 'On Progress'
+            AND pp.line = ${line}
         GROUP BY 
             pp.trainset
     ) op ON op.trainset = pp.trainset
 
     WHERE 
         pp.start_actual IS NOT NULL
+        AND j.line = ${line}
 
     GROUP BY 
         pp.trainset
@@ -647,3 +695,16 @@ ORDER BY
     return [];
   }
 }
+
+export async function getLantai3DashboardLantai3(): Promise<DashboardLantai3Row[]> {
+    return getLantai3Dashboard('Lantai 3');
+}
+
+export async function getLantai2Dashboard(): Promise<DashboardLantai3Row[]> {
+    return getLantai3Dashboard('Lantai 2');
+}
+
+export async function getLantai1Dashboard(): Promise<DashboardLantai3Row[]> {
+    return getLantai3Dashboard('Lantai 1');
+}
+

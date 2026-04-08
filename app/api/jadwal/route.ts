@@ -30,6 +30,14 @@ function parseRowResult(result: any) {
   return Array.isArray(result) ? (Array.isArray(result[0]) ? result[0] : result) : [];
 }
 
+function getProductionProgressTableByLine(line?: string) {
+  const normalizedLine = (line ?? "").trim().toLowerCase();
+  const tableName = normalizedLine === "lantai 1" || normalizedLine === "lantai 2"
+    ? "production_progress_protrack"
+    : "production_progress";
+  return sql.raw(tableName);
+}
+
 function normalizePayload(body: any): JadwalPayload | null {
   const id_product = String(body?.id_product || "").trim();
   const product_name = String(body?.product_name || "").trim();
@@ -82,79 +90,88 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const trainsetParam = searchParams.get("trainset");
+    const lineParam = searchParams.get("line") || "Lantai 3";
+    const progressTable = getProductionProgressTableByLine(lineParam);
 
     let result;
     if (trainsetParam) {
       const trainset = Number(trainsetParam);
       result = await db.execute(sql`
-        SELECT 
-          j.id_product, 
-          j.product_name,
-          j.project,
-          j.trainset, 
-          j.jumlah_tiapts,
-          j.total_personil,
-          j.operator_assigned1,
-          j.operator_assigned2,
-          j.operator_assigned3,
-          j.line,
-          j.workshop,
-          j.tanggal_mulai, 
-          j.tanggal_selesai,
-          COALESCE(p.jumlah_tunggu_qc, 0) AS jumlah_tunggu_qc,
-          COALESCE(p.jumlah_finish_good, 0) AS jumlah_finish_good,
-          it.duration_time AS total_ideal_time_qc,
-          GREATEST(
-            j.jumlah_tiapts - COALESCE(p.jumlah_tunggu_qc,0),
-            0
-          ) AS jumlah_kekurangan,
-          CASE
-            WHEN 
-              COALESCE(p.jumlah_tunggu_qc,0) = j.jumlah_tiapts
-              AND j.trainset = p.trainset
-            THEN 'Tepat Waktu'
-            WHEN 
-              COALESCE(p.jumlah_tunggu_qc,0) <> j.jumlah_tiapts
-              AND CURRENT_DATE() > j.tanggal_selesai
-            THEN 'Terlambat / Tidak Tercatat'
-            WHEN 
-              CURRENT_DATE() BETWEEN 
-                DATE_SUB(j.tanggal_selesai, INTERVAL 3 DAY)
-                AND j.tanggal_selesai
-            THEN CONCAT('Kurang ', DATEDIFF(j.tanggal_selesai, CURRENT_DATE()), ' Hari')
-            WHEN 
-              MONTH(j.tanggal_selesai) <> MONTH(CURRENT_DATE())
-              OR YEAR(j.tanggal_selesai) <> YEAR(CURRENT_DATE())
-            THEN 'Waiting List'
-            ELSE 'On Progress'
-          END AS status
-        FROM jadwal AS j 
-        LEFT JOIN 
-        (
-          SELECT 
-            id_product,
-            trainset,
-            SUM(CASE 
-              WHEN status = 'Tunggu QC' THEN 1 
-              ELSE 0 
-            END) AS jumlah_tunggu_qc,
-            SUM(CASE 
-              WHEN status = 'Finish Good' THEN 1 
-              ELSE 0 
-            END) AS jumlah_finish_good
-          FROM production_progress
-          WHERE 
-            MONTH(start_actual) = MONTH(CURRENT_DATE()) 
-            AND YEAR(start_actual) = YEAR(CURRENT_DATE())
-          GROUP BY id_product, trainset
-        ) p 
-          ON j.id_product = p.id_product
-          AND j.trainset = p.trainset
-        LEFT JOIN ideal_time it
-          ON j.id_product = it.id_product
-          AND it.process_name = 'total_production_qc'
-        WHERE j.trainset = ${trainset}
-        ORDER BY j.tanggal_mulai ASC;
+SELECT 
+  j.id_product, 
+  j.product_name,
+  j.project,
+  j.trainset, 
+  j.jumlah_tiapts,
+  j.total_personil,
+  j.operator_assigned1,
+  j.operator_assigned2,
+  j.operator_assigned3,
+  j.line,
+  j.workshop,
+  j.tanggal_mulai, 
+  j.tanggal_selesai,
+  COALESCE(p.jumlah_tunggu_qc, 0) AS jumlah_tunggu_qc,
+  COALESCE(p.jumlah_finish_good, 0) AS jumlah_finish_good,
+  it.duration_time AS total_ideal_time_qc,
+  GREATEST(
+    j.jumlah_tiapts - COALESCE(p.jumlah_tunggu_qc,0),
+    0
+  ) AS jumlah_kekurangan,
+  CASE
+    WHEN 
+      COALESCE(p.jumlah_tunggu_qc,0) = j.jumlah_tiapts
+      AND j.trainset = p.trainset
+    THEN 'Tepat Waktu'
+    WHEN 
+      COALESCE(p.jumlah_tunggu_qc,0) <> j.jumlah_tiapts
+      AND CURRENT_DATE() > j.tanggal_selesai
+    THEN 'Terlambat / Tidak Tercatat'
+    WHEN 
+      CURRENT_DATE() BETWEEN 
+        DATE_SUB(j.tanggal_selesai, INTERVAL 3 DAY)
+        AND j.tanggal_selesai
+    THEN CONCAT('Kurang ', DATEDIFF(j.tanggal_selesai, CURRENT_DATE()), ' Hari')
+    WHEN 
+      MONTH(j.tanggal_selesai) <> MONTH(CURRENT_DATE())
+      OR YEAR(j.tanggal_selesai) <> YEAR(CURRENT_DATE())
+    THEN 'Waiting List'
+    ELSE 'On Progress'
+  END AS status
+
+FROM jadwal AS j 
+
+LEFT JOIN 
+(
+  SELECT 
+    id_product,
+    trainset,
+    SUM(CASE 
+      WHEN status = 'Tunggu QC' THEN 1 
+      ELSE 0 
+    END) AS jumlah_tunggu_qc,
+    SUM(CASE 
+      WHEN status = 'Finish Good' THEN 1 
+      ELSE 0 
+    END) AS jumlah_finish_good
+  FROM ${progressTable}
+  WHERE 
+    MONTH(start_actual) = MONTH(CURRENT_DATE()) 
+    AND YEAR(start_actual) = YEAR(CURRENT_DATE())
+  GROUP BY id_product, trainset
+) p 
+  ON j.id_product = p.id_product
+  AND j.trainset = p.trainset
+
+LEFT JOIN ideal_time it
+  ON j.id_product = it.id_product
+  AND it.process_name = 'total_production_qc'
+
+WHERE 
+  j.trainset = ${trainset}
+  AND j.line = ${lineParam}
+
+ORDER BY j.tanggal_mulai ASC;
       `);
     } else {
       result = await db.execute(sql`
@@ -213,7 +230,7 @@ export async function GET(request: Request) {
               WHEN status = 'Finish Good' THEN 1 
               ELSE 0 
             END) AS jumlah_finish_good
-          FROM production_progress
+          FROM ${progressTable}
           WHERE 
             MONTH(start_actual) = MONTH(CURRENT_DATE()) 
             AND YEAR(start_actual) = YEAR(CURRENT_DATE())
@@ -224,6 +241,7 @@ export async function GET(request: Request) {
         LEFT JOIN ideal_time it
           ON j.id_product = it.id_product
           AND it.process_name = 'total_production_qc'
+        WHERE j.line = ${lineParam}
         ORDER BY j.tanggal_mulai ASC;
       `);
     }

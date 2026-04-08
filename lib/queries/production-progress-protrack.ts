@@ -11,14 +11,6 @@ function extractRows(result: any): any[] {
   return Array.isArray(result) ? result : [];
 }
 
-function getProductionProgressTableByLine(line?: string) {
-  const normalizedLine = (line ?? '').trim().toLowerCase();
-  const tableName = normalizedLine === 'lantai 1' || normalizedLine === 'lantai 2'
-    ? 'production_progress_protrack'
-    : 'production_progress';
-  return sql.raw(tableName);
-}
-
 export interface ProductionProgress {
   id_process: number;
   id_product: string | null;
@@ -111,14 +103,12 @@ export async function getProductionProgressByWorkshop(workshop: string): Promise
 }
 
 // Get by line
-export async function getProductionProgressByLine(line: string, limit?: number): Promise<ProductionProgress[]> {
+export async function getProductionProgressByLine(line: string): Promise<ProductionProgress[]> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
-      SELECT * FROM ${progressTable}
+      SELECT * FROM production_progress
       WHERE line = ${line}
       ORDER BY start_actual DESC
-      ${typeof limit === 'number' ? sql`LIMIT ${limit}` : sql``}
     `);
     
     const rows = extractRows(result);
@@ -341,7 +331,6 @@ export async function getProductionStatsByWorkshop(workshop: string): Promise<Pr
 // Get production statistics by line
 export async function getProductionStatsByLine(line: string): Promise<ProductionStats> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
       SELECT 
         COUNT(*) as total_processes,
@@ -350,7 +339,7 @@ export async function getProductionStatsByLine(line: string): Promise<Production
         SUM(CASE WHEN start_actual IS NULL THEN 1 ELSE 0 END) as pending,
         AVG(duration_sec_actual) as avg_duration_sec,
         SUM(duration_sec_actual) as total_duration_sec
-      FROM ${progressTable}
+      FROM production_progress
       WHERE line = ${line}
     `);
     
@@ -403,7 +392,6 @@ ORDER BY
 // Get workstation statistics by line
 export async function getWorkstationStatsByLine(line: string): Promise<WorkstationStats[]> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
       SELECT 
         workstation,
@@ -413,7 +401,7 @@ export async function getWorkstationStatsByLine(line: string): Promise<Workstati
         MAX(operator_actual_name) as active_operator,
         MAX(product_name) as product_name,
         MAX(id_perproduct) as id_perproduct
-      FROM ${progressTable}
+      FROM production_progress
       WHERE line = ${line} AND workstation IS NOT NULL
       GROUP BY workstation
       ORDER BY workstation ASC
@@ -531,9 +519,8 @@ export interface AbnormalProgress {
 }
 
 // Get latest active process per workstation (finish_actual is null)
-export async function getRecentProgress(line?: string): Promise<CurrentWorkstationProgress[]> {
+export async function getRecentProgress(): Promise<CurrentWorkstationProgress[]> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
 WITH RankedData AS (
     SELECT
@@ -547,13 +534,12 @@ WITH RankedData AS (
         pp.start_actual AS current_start_actual,
         pp.status AS current_status,
         ROW_NUMBER() OVER (PARTITION BY pp.workstation ORDER BY pp.start_actual DESC) as urutan
-    FROM ${progressTable} AS pp
+    FROM production_progress AS pp
     LEFT JOIN ideal_time AS t 
         ON pp.id_product = t.id_product 
         AND pp.status = t.status
     WHERE DATE(pp.start_actual) = CURDATE()
     AND pp.status NOT IN ('Tunggu Selesai', 'Gangguan Selesai')
-    ${line ? sql`AND pp.line = ${line}` : sql``}
 )
 SELECT * FROM RankedData 
 WHERE urutan = 1;
@@ -568,9 +554,8 @@ WHERE urutan = 1;
 }
 
 
-export async function getRecentOperatorByLine(line: string = 'Lantai 3'): Promise<OperatorStats[]> {
+export async function getRecentOperatorLantai3(): Promise<OperatorStats[]> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
 SELECT 
     p.operator_actual_rfid, 
@@ -579,9 +564,9 @@ SELECT
     -- Ambil product_name terbaru
     (
         SELECT pp.product_name
-        FROM ${progressTable} pp
+        FROM production_progress pp
         WHERE pp.operator_actual_rfid = p.operator_actual_rfid
-          AND pp.line = ${line}
+          AND pp.line = 'Lantai 3'
         ORDER BY pp.start_actual DESC
         LIMIT 1
     ) AS latest_product_name,
@@ -589,9 +574,9 @@ SELECT
     -- Ambil id_perproduct terbaru
     (
         SELECT pp.id_perproduct
-        FROM ${progressTable} pp
+        FROM production_progress pp
         WHERE pp.operator_actual_rfid = p.operator_actual_rfid
-          AND pp.line = ${line}
+          AND pp.line = 'Lantai 3'
         ORDER BY pp.start_actual DESC
         LIMIT 1
     ) AS latest_id_perproduct,
@@ -599,10 +584,10 @@ SELECT
     -- Ambil start_actual terbaru (On Progress)
     (
         SELECT pp.start_actual
-        FROM ${progressTable} pp
+        FROM production_progress pp
         WHERE pp.operator_actual_rfid = p.operator_actual_rfid
           AND pp.status = 'On Progress'
-          AND pp.line = ${line}
+          AND pp.line = 'Lantai 3'
         ORDER BY pp.start_actual DESC
         LIMIT 1
     ) AS latest_start_actual,
@@ -610,20 +595,20 @@ SELECT
     -- Total 'Tunggu QC' seumur hidup (hanya Lantai 3)
     (
         SELECT COUNT(*) 
-        FROM ${progressTable} all_time 
+        FROM production_progress all_time 
         WHERE all_time.operator_actual_rfid = p.operator_actual_rfid 
           AND all_time.status = 'Tunggu QC'
-          AND all_time.line = ${line}
+          AND all_time.line = 'Lantai 3'
     ) AS total_selesai_all_time,
     
     -- Total 'Tunggu QC' hari ini
     COUNT(CASE WHEN p.status = 'Tunggu QC' THEN 1 END) AS total_selesai_hari_ini
 
 FROM 
-    ${progressTable} p
+    production_progress p
 WHERE 
     DATE(p.start_actual) = CURRENT_DATE()
-  AND p.line = ${line}
+    AND p.line = 'Lantai 3'
 
 GROUP BY 
     p.operator_actual_rfid, 
@@ -641,13 +626,8 @@ ORDER BY
   }
 }
 
-export async function getRecentOperatorLantai3(): Promise<OperatorStats[]> {
-  return getRecentOperatorByLine('Lantai 3');
-}
-
-export async function getAbnormalProgress(daysBack: number = 7, line?: string): Promise<AbnormalProgress[]> {
+export async function getAbnormalProgress(daysBack: number = 7): Promise<AbnormalProgress[]> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
 SELECT
   pp.operator_actual_rfid,
@@ -662,7 +642,7 @@ SELECT
       AND pp.start_actual <= NOW() - INTERVAL 3 DAY
       AND NOT EXISTS (
           SELECT 1
-          FROM ${progressTable} qc
+          FROM production_progress qc
           WHERE qc.id_perproduct = pp.id_perproduct
             AND qc.status = 'Tunggu QC'
       )
@@ -678,7 +658,7 @@ SELECT
       AND pp.start_actual <= NOW() - INTERVAL 3 DAY
       AND NOT EXISTS (
           SELECT 1
-          FROM ${progressTable} qc
+          FROM production_progress qc
           WHERE qc.id_perproduct = pp.id_perproduct
             AND qc.status = 'Tunggu QC'
       )
@@ -691,11 +671,10 @@ SELECT
 
   END AS kategori
 
-FROM ${progressTable} pp
+FROM production_progress pp
 
 WHERE
     pp.start_actual >= NOW() - INTERVAL ${daysBack} DAY 
-${line ? sql`AND pp.line = ${line}` : sql``}
 
 AND
 (
@@ -704,12 +683,12 @@ AND
         AND pp.start_actual <= NOW() - INTERVAL 3 DAY
         AND pp.start_actual = (
             SELECT MAX(sub.start_actual)
-            FROM ${progressTable} sub
+            FROM production_progress sub
             WHERE sub.id_perproduct = pp.id_perproduct
         )
         AND NOT EXISTS (
             SELECT 1
-            FROM ${progressTable} qc
+            FROM production_progress qc
             WHERE qc.id_perproduct = pp.id_perproduct
               AND qc.status = 'Tunggu QC'
         )
@@ -733,16 +712,14 @@ AND
 }
 
 // Get actual duration for each workstation (today)
-export async function getWorkstationDurations(line?: string): Promise<WorkstationDuration[]> {
+export async function getWorkstationDurations(): Promise<WorkstationDuration[]> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
       SELECT 
         workstation,
         duration_time_actual as actual_duration
-      FROM ${progressTable}
+      FROM production_progress
       WHERE DATE(start_actual) = CURDATE()
-      ${line ? sql`AND line = ${line}` : sql``}
       ORDER BY workstation ASC, start_actual DESC
     `);
     
@@ -755,9 +732,8 @@ export async function getWorkstationDurations(line?: string): Promise<Workstatio
 }
 
 // Get production estimate based on WS1 start time and total_production_qc duration
-export async function getProductionEstimate(line?: string): Promise<ProductionEstimate | null> {
+export async function getProductionEstimate(): Promise<ProductionEstimate | null> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
       SELECT 
         pp.id_product,
@@ -765,14 +741,13 @@ export async function getProductionEstimate(line?: string): Promise<ProductionEs
         pp.start_actual,
         it.duration_time as total_duration,
         DATE_ADD(pp.start_actual, INTERVAL TIME_TO_SEC(it.duration_time) SECOND) as estimated_finish
-      FROM ${progressTable} pp
+      FROM production_progress pp
       INNER JOIN ideal_time it 
         ON pp.id_product = it.id_product 
         AND it.process_name = 'total_production_qc'
       WHERE pp.workstation IN (0, 1) 
         AND DATE(pp.start_actual) = CURDATE()
         AND pp.finish_actual IS NULL
-        ${line ? sql`AND pp.line = ${line}` : sql``}
       ORDER BY pp.start_actual DESC
       LIMIT 1
     `);
@@ -786,27 +761,24 @@ export async function getProductionEstimate(line?: string): Promise<ProductionEs
 }
 
 // Get product status cards for specified date range (default: last 7 days)
-export async function getProductStatusCards(daysBack: number = 7, line?: string): Promise<ProductStatusCard[]> {
+export async function getProductStatusCards(daysBack: number = 7): Promise<ProductStatusCard[]> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
 WITH ws1_start AS (
   SELECT
     id_perproduct,
     MIN(start_actual) as ws1_start_actual
-  FROM ${progressTable}
+  FROM production_progress
   WHERE workstation IN (0, 1)
     AND DATE(start_actual) >= DATE_SUB(CURDATE(), INTERVAL ${daysBack} DAY)
-    ${line ? sql`AND line = ${line}` : sql``}
   GROUP BY id_perproduct
 ),
 latest AS (
   SELECT
     pp.*,
     ROW_NUMBER() OVER (PARTITION BY pp.id_perproduct ORDER BY pp.start_actual DESC) AS rn
-  FROM ${progressTable} pp
+  FROM production_progress pp
   WHERE DATE(pp.start_actual) >= DATE_SUB(CURDATE(), INTERVAL ${daysBack} DAY)
-    ${line ? sql`AND pp.line = ${line}` : sql``}
 )
 SELECT
   l.id_product,
@@ -852,9 +824,8 @@ export async function getProductionProgressByWorkshopAndLine(
   line: string
 ): Promise<ProductionProgress[]> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
-      SELECT * FROM ${progressTable}
+      SELECT * FROM production_progress
       WHERE workshop = ${workshop} AND line = ${line}
       ORDER BY start_actual DESC
     `);
@@ -873,9 +844,8 @@ export async function getProductionProgressByLineAndWorkstation(
   workstation: number
 ): Promise<ProductionProgress[]> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
-      SELECT * FROM ${progressTable}
+      SELECT * FROM production_progress
       WHERE line = ${line} AND workstation = ${workstation}
       ORDER BY start_actual DESC
     `);
@@ -923,9 +893,8 @@ export async function logProductionProgressSample(limit: number = 10): Promise<P
 }
 
 // Get production status summary
-export async function getProductStatusSummary(daysBack: number = 7, line?: string): Promise<ProductStatusSummary> {
+export async function getProductStatusSummary(daysBack: number = 7): Promise<ProductStatusSummary> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysBack);
     
@@ -942,16 +911,14 @@ WITH LatestStatus AS (
             ORDER BY pp.start_actual DESC
         ) AS rn
 
-    FROM ${progressTable} pp
-    ${line ? sql`WHERE pp.line = ${line}` : sql``}
+    FROM production_progress pp
 ),
 
 /* ===================== HISTORI PERIODE ===================== */
 HistoriPeriode AS (
     SELECT *
-    FROM ${progressTable}
+    FROM production_progress
     WHERE start_actual >= ${startDate}
-    ${line ? sql`AND line = ${line}` : sql``}
 )
 
 /* ===================== AGREGASI ===================== */
@@ -1046,9 +1013,8 @@ AND ls.start_actual >= ${startDate};
   }
 }
 
-export async function getProductSchedule(line?: string): Promise<any[]> {
+export async function getProductSchedule(): Promise<any[]> {
   try {
-    const progressTable = getProductionProgressTableByLine(line);
     const result = await db.execute(sql`
 SELECT 
     j.id_product, 
@@ -1071,7 +1037,7 @@ LEFT JOIN
             SUM(CASE WHEN status = 'Tunggu QC' THEN 1 ELSE 0 END) AS jumlah_tunggu_qc,
             -- Hitung Finish Good
             SUM(CASE WHEN status = 'Finish Good' THEN 1 ELSE 0 END) AS jumlah_finish_good
-        FROM ${progressTable}
+        FROM production_progress
         WHERE 
             -- Filter: Hanya ambil progress yang start_actual-nya bulan ini
             MONTH(start_actual) = MONTH(CURRENT_DATE()) 
@@ -1084,7 +1050,7 @@ WHERE
     -- Filter: Hanya ambil jadwal yang tanggal_mulai-nya bulan ini
     MONTH(j.tanggal_mulai) = MONTH(CURRENT_DATE()) 
     AND YEAR(j.tanggal_mulai) = YEAR(CURRENT_DATE())
-  ${line ? sql`AND j.line = ${line}` : sql``}
+    AND j.line = 'Lantai 3'
 ORDER BY 
     j.tanggal_selesai ASC;
     `);

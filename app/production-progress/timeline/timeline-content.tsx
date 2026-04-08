@@ -20,6 +20,8 @@ interface TimelineContentProps {
   initialOperators: OperatorStats[];
   initialAbnormal?: AbnormalProgress[];
   forcedStep?: number;
+  lineLabel: string;
+  apiLine: string;
 }
 
 function formatEst(duration?: string | null) {
@@ -138,6 +140,8 @@ export default function TimelineContent({
   initialOperators,
   initialAbnormal,
   forcedStep,
+  lineLabel,
+  apiLine,
 }: TimelineContentProps) {
   const [stats, setStats] = useState<ProductionStats>(initialStats);
   const [workstations, setWorkstations] = useState<WorkstationStats[]>(initialWorkstations);
@@ -158,7 +162,7 @@ export default function TimelineContent({
     setIsLoading(true);
     try {
       //console.log('[Timeline] Fetching data at', new Date().toLocaleTimeString('id-ID'));
-      const response = await fetch(`/api/production-progress/current?daysBack=${days}`, {
+      const response = await fetch(`/api/production-progress/current?daysBack=${days}&line=${encodeURIComponent(apiLine)}`, {
         cache: 'no-store',
       });
       if (!response.ok) throw new Error('Failed to fetch');
@@ -239,7 +243,7 @@ export default function TimelineContent({
           <div>
             <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
               <MapPin className="w-8 h-8 text-blue-400" />
-              Lantai 3
+              {lineLabel}
             </h1>
             <p className="text-gray-400 flex items-center gap-2">
               <Activity className="w-4 h-4 animate-pulse text-emerald-400" />

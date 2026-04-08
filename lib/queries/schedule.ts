@@ -29,6 +29,7 @@ export async function getAllSchedules(): Promise<Schedule[]> {
   try {
     const result = await db.execute(sql`
       SELECT * FROM production_schedule
+      WHERE line = 'Lantai 3'
       ORDER BY start_schedule DESC
     `);
     
