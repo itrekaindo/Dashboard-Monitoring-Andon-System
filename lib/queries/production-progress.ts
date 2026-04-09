@@ -497,6 +497,10 @@ export interface ProductStatusCard {
   id_product: string;
   id_perproduct: string | null;
   product_name: string | null;
+  process_name: string | null;
+  percentage: number | null;
+  qty_progress: number | null;
+  total: number | null;
   operator_actual_name: string | null;
   start_actual: Date | string | null;
   finish_actual: Date | string | null;
@@ -571,6 +575,14 @@ WHERE urutan = 1;
 export async function getRecentOperatorByLine(line: string = 'Lantai 3'): Promise<OperatorStats[]> {
   try {
     const progressTable = getProductionProgressTableByLine(line);
+    const normalizedLine = (line ?? '').trim().toLowerCase();
+    const isLantai12 = normalizedLine === 'lantai 1' || normalizedLine === 'lantai 2';
+    const baseWindowFilter = isLantai12
+      ? sql`p.start_actual >= NOW() - INTERVAL 24 HOUR`
+      : sql`DATE(p.start_actual) = CURRENT_DATE()`;
+    const completedCountExpr = isLantai12
+      ? sql`COUNT(CASE WHEN p.status = 'Tunggu QC' AND p.start_actual >= NOW() - INTERVAL 24 HOUR THEN 1 END) AS total_selesai_hari_ini`
+      : sql`COUNT(CASE WHEN p.status = 'Tunggu QC' THEN 1 END) AS total_selesai_hari_ini`;
     const result = await db.execute(sql`
 SELECT 
     p.operator_actual_rfid, 
@@ -617,12 +629,12 @@ SELECT
     ) AS total_selesai_all_time,
     
     -- Total 'Tunggu QC' hari ini
-    COUNT(CASE WHEN p.status = 'Tunggu QC' THEN 1 END) AS total_selesai_hari_ini
+    ${completedCountExpr}
 
 FROM 
     ${progressTable} p
 WHERE 
-    DATE(p.start_actual) = CURRENT_DATE()
+    ${baseWindowFilter}
   AND p.line = ${line}
 
 GROUP BY 
@@ -789,6 +801,14 @@ export async function getProductionEstimate(line?: string): Promise<ProductionEs
 export async function getProductStatusCards(daysBack: number = 7, line?: string): Promise<ProductStatusCard[]> {
   try {
     const progressTable = getProductionProgressTableByLine(line);
+    const normalizedLine = (line ?? '').trim().toLowerCase();
+    const useProtrackProgress = normalizedLine === 'lantai 1' || normalizedLine === 'lantai 2';
+    const percentageSelect = useProtrackProgress
+      ? sql`COALESCE(l.percentage, 0) AS percentage,`
+      : sql`NULL AS percentage,`;
+    const progressCountSelect = useProtrackProgress
+      ? sql`COALESCE(l.qty_progress, 0) AS qty_progress, COALESCE(l.total, 0) AS total,`
+      : sql`NULL AS qty_progress, NULL AS total,`;
     const result = await db.execute(sql`
 WITH ws1_start AS (
   SELECT
@@ -812,6 +832,9 @@ SELECT
   l.id_product,
   l.id_perproduct,
   l.product_name,
+  l.process_name,
+  ${percentageSelect}
+  ${progressCountSelect}
   l.operator_actual_name,
   ws1.ws1_start_actual as start_actual,
   l.finish_actual,
@@ -1049,17 +1072,67 @@ AND ls.start_actual >= ${startDate};
 export async function getProductSchedule(line?: string): Promise<any[]> {
   try {
     const progressTable = getProductionProgressTableByLine(line);
+  const normalizedLine = (line ?? '').trim().toLowerCase();
+  const useProtrackProgress = normalizedLine === 'lantai 1' || normalizedLine === 'lantai 2';
+
+  if (useProtrackProgress) {
+    const result = await db.execute(sql`
+SELECT 
+  j.id_product, 
+  j.product_name, 
+  j.trainset, 
+  j.total_personil,
+  j.proses_produk,
+  j.jumlah_tiapts as total,
+  j.tanggal_mulai, 
+  j.tanggal_selesai,
+  COALESCE(p.qty_progress, 0) AS jumlah_tunggu_qc,
+  COALESCE(p.jumlah_finish_good, 0) AS jumlah_finish_good,
+  COALESCE(p.percentage, 0) AS percentage
+FROM 
+  jadwal as j 
+LEFT JOIN 
+  (
+    SELECT 
+      id_product,
+      trainset,
+      COALESCE(MAX(qty_progress), 0) AS qty_progress,
+      COALESCE(MAX(percentage), 0) AS percentage,
+      SUM(CASE WHEN status = 'Finish Good' THEN 1 ELSE 0 END) AS jumlah_finish_good
+    FROM ${progressTable}
+    WHERE 
+      MONTH(start_actual) = MONTH(CURRENT_DATE()) 
+      AND YEAR(start_actual) = YEAR(CURRENT_DATE())
+      ${line ? sql`AND line = ${line}` : sql``}
+    GROUP BY id_product, trainset
+  ) p 
+  ON j.id_product = p.id_product
+    AND j.trainset = p.trainset
+WHERE 
+  MONTH(j.tanggal_mulai) = MONTH(CURRENT_DATE()) 
+  AND YEAR(j.tanggal_mulai) = YEAR(CURRENT_DATE())
+  ${line ? sql`AND j.line = ${line}` : sql``}
+ORDER BY 
+  j.tanggal_selesai ASC;
+    `);
+
+    const rows = extractRows(result);
+    return rows;
+  }
+
     const result = await db.execute(sql`
 SELECT 
     j.id_product, 
     j.product_name, 
     j.trainset, 
     j.total_personil,
+    j.proses_produk,
     j.jumlah_tiapts as total,
     j.tanggal_mulai, 
     j.tanggal_selesai,
     COALESCE(p.jumlah_tunggu_qc, 0) AS jumlah_tunggu_qc,
-    COALESCE(p.jumlah_finish_good, 0) AS jumlah_finish_good
+    COALESCE(p.jumlah_finish_good, 0) AS jumlah_finish_good,
+    0 AS percentage
 FROM 
     jadwal as j 
 LEFT JOIN 

@@ -22,6 +22,7 @@ interface TimelineContentProps {
   forcedStep?: number;
   lineLabel: string;
   apiLine: string;
+  showWorkstationTimeline?: boolean;
 }
 
 function formatEst(duration?: string | null) {
@@ -56,6 +57,25 @@ function formatDateTime(value?: Date | string | null) {
   if (!value) return "—";
   const d = new Date(value);
   return `${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} ${d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function formatDateOnly(value?: Date | string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function formatPercentage(value?: number | string | null) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "—";
+  return `${num}%`;
+}
+
+function formatProgressCount(card: ProductStatusCard) {
+  const qtyProgress = Number(card.qty_progress);
+  const total = Number(card.total);
+  if (!Number.isFinite(qtyProgress) || !Number.isFinite(total)) return "Proses";
+  return `${qtyProgress} / ${total}`;
 }
 
 function parseWsFromStatus(status?: string | null): number | undefined {
@@ -142,7 +162,12 @@ export default function TimelineContent({
   forcedStep,
   lineLabel,
   apiLine,
+  showWorkstationTimeline = true,
 }: TimelineContentProps) {
+  const normalizedLine = (apiLine ?? "").trim().toLowerCase();
+  const isLantai12 = normalizedLine === "lantai 1" || normalizedLine === "lantai 2";
+  const hideKanbanEstimateTarget = isLantai12;
+
   const [stats, setStats] = useState<ProductionStats>(initialStats);
   const [workstations, setWorkstations] = useState<WorkstationStats[]>(initialWorkstations);
   const [recent, setRecent] = useState<ProductionProgress[]>(initialRecent);
@@ -290,96 +315,98 @@ export default function TimelineContent({
         *}
 
         {/* Timeline */}
-        <Card className="bg-gray-900/60 border border-gray-700/60 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="w-full">
-              <div className="flex items-center justify-between gap-4 md:gap-6">
-                {points.map((ws, idx) => {
-                  const isCurrent = ws.workstation === currentStep;
-                  const nextExists = idx < points.length - 1;
-                  const currentWsData = currentByWs.get(ws.workstation);
-                  const estTime = formatEst(currentWsData?.target_durasi || "");
-                  const info = statusInfo.get(ws.workstation ?? 0);
-                  const status = info?.status;
-                  const variant = statusVariant(status);
-                  const showElapsed = (
-                    (status || "").toLowerCase().includes("on progress") || 
-                    (status || "").toLowerCase().includes("masuk") 
-                  ) && (variant.bg.includes("emerald") || variant.bg.includes("blue"));
-                  const isWaitingMulai = (status || "").toLowerCase().includes("istirahat");
-                  const isWaitingSelesai = (status || "").toLowerCase().includes("on progress") || (status || "").toLowerCase().includes("masuk");
-                  const showWaitingElapsed = isWaitingMulai && !isWaitingSelesai;
-                  const isPausedWaiting = isWaitingSelesai;
-                  const baseClass = `${variant.bg} ${variant.border} ${variant.text}`;
-                  const blinkClass = variant.blink ? "animate-pulse" : "";
+        {showWorkstationTimeline && (
+          <Card className="bg-gray-900/60 border border-gray-700/60 backdrop-blur-sm">
+            <CardContent className="p-6">
+              <div className="w-full">
+                <div className="flex items-center justify-between gap-4 md:gap-6">
+                  {points.map((ws, idx) => {
+                    const isCurrent = ws.workstation === currentStep;
+                    const nextExists = idx < points.length - 1;
+                    const currentWsData = currentByWs.get(ws.workstation);
+                    const estTime = formatEst(currentWsData?.target_durasi || "");
+                    const info = statusInfo.get(ws.workstation ?? 0);
+                    const status = info?.status;
+                    const variant = statusVariant(status);
+                    const showElapsed = (
+                      (status || "").toLowerCase().includes("on progress") || 
+                      (status || "").toLowerCase().includes("masuk") 
+                    ) && (variant.bg.includes("emerald") || variant.bg.includes("blue"));
+                    const isWaitingMulai = (status || "").toLowerCase().includes("istirahat");
+                    const isWaitingSelesai = (status || "").toLowerCase().includes("on progress") || (status || "").toLowerCase().includes("masuk");
+                    const showWaitingElapsed = isWaitingMulai && !isWaitingSelesai;
+                    const isPausedWaiting = isWaitingSelesai;
+                    const baseClass = `${variant.bg} ${variant.border} ${variant.text}`;
+                    const blinkClass = variant.blink ? "animate-pulse" : "";
 
-                  return (
-                    <div key={ws.workstation} className="flex flex-col flex-1 min-w-0">
-                      <div className="flex items-center gap-0 h-12">
-                        <div className="flex flex-col items-center shrink-0 w-24">
-                          <div
-                            className={
-                              `w-12 h-12 rounded-full border-2 flex items-center justify-center text-sm font-semibold transition-all ${baseClass} ${blinkClass} ` +
-                              (isCurrent ? "shadow-[0_0_0_8px_rgba(251,191,36,0.15)]" : "")
-                            }
-                          >
-                            WS{ws.workstation}
-                          </div>
-                        </div>
-
-                        {nextExists && (
-                          <div className="flex-1 flex items-center px-3 md:px-4 relative">
-                            <div className="relative flex items-center w-full h-8">
-                              <div className="w-full h-[2px] rounded-full bg-gray-700/80">
-                                <div
-                                  className={`h-[2px] rounded-full transition-all ${variant.blink ? "animate-pulse" : ""} ` +
-                                    (variant.bg.includes("rose")
-                                      ? "bg-rose-500"
-                                      : variant.bg.includes("amber")
-                                        ? "bg-amber-400"
-                                        : variant.bg.includes("emerald")
-                                          ? "bg-emerald-400"
-                                          : variant.bg.includes("blue")
-                                            ? "bg-blue-400"
-                                            : "bg-gray-600")}
-                                  style={{ width: "100%" }}
-                                />
-                              </div>
-                              <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 text-[10px] text-gray-400 whitespace-nowrap">EST : {estTime}</div>
+                    return (
+                      <div key={ws.workstation} className="flex flex-col flex-1 min-w-0">
+                        <div className="flex items-center gap-0 h-12">
+                          <div className="flex flex-col items-center shrink-0 w-24">
+                            <div
+                              className={
+                                `w-12 h-12 rounded-full border-2 flex items-center justify-center text-sm font-semibold transition-all ${baseClass} ${blinkClass} ` +
+                                (isCurrent ? "shadow-[0_0_0_8px_rgba(251,191,36,0.15)]" : "")
+                              }
+                            >
+                              WS{ws.workstation}
                             </div>
                           </div>
-                        )}
+
+                          {nextExists && (
+                            <div className="flex-1 flex items-center px-3 md:px-4 relative">
+                              <div className="relative flex items-center w-full h-8">
+                                <div className="w-full h-[2px] rounded-full bg-gray-700/80">
+                                  <div
+                                    className={`h-[2px] rounded-full transition-all ${variant.blink ? "animate-pulse" : ""} ` +
+                                      (variant.bg.includes("rose")
+                                        ? "bg-rose-500"
+                                        : variant.bg.includes("amber")
+                                          ? "bg-amber-400"
+                                          : variant.bg.includes("emerald")
+                                            ? "bg-emerald-400"
+                                            : variant.bg.includes("blue")
+                                              ? "bg-blue-400"
+                                              : "bg-gray-600")}
+                                    style={{ width: "100%" }}
+                                  />
+                                </div>
+                                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 text-[10px] text-gray-400 whitespace-nowrap">EST : {estTime}</div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex flex-col items-center gap-1 mt-2 shrink-0 w-24">
+                          <div className="text-xs text-emerald-400 font-semibold">{currentByWs.get(ws.workstation)?.presentase ? `${currentByWs.get(ws.workstation)?.presentase}%` : "—"}</div>
+                        </div>
+                        
+                        <div className="flex flex-col mt-3 shrink-0 w-24">
+                          <div className="text-xs text-gray-300 text-center truncate font-semibold">{ws.product_name || "-"}</div>
+                          <div className="text-xs text-gray-300 text-center truncate">{ws.active_operator || "-"}</div>
+                           <div className="text-[10px] text-gray-400 text-center truncate">{ws.current_status || "-"}</div>
+                          {showElapsed ? (
+                            <Elapsed since={info?.at} className={`text-[11px] text-center truncate ${
+                              variant.bg.includes("blue") ? "text-blue-400" : "text-gray-400"
+                            }`} />
+                          ) : showWaitingElapsed && info?.at ? (
+                            <div className="text-[11px] text-amber-400 text-center truncate font-semibold">
+                              <Elapsed since={info?.at} isPaused={isPausedWaiting} />
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-gray-400 text-center truncate">
+                              {formatEst(durations.find(d => d.workstation === ws.workstation)?.actual_duration || null)}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      
-                      <div className="flex flex-col items-center gap-1 mt-2 shrink-0 w-24">
-                        <div className="text-xs text-emerald-400 font-semibold">{currentByWs.get(ws.workstation)?.presentase ? `${currentByWs.get(ws.workstation)?.presentase}%` : "—"}</div>
-                      </div>
-                      
-                      <div className="flex flex-col mt-3 shrink-0 w-24">
-                        <div className="text-xs text-gray-300 text-center truncate font-semibold">{ws.product_name || "-"}</div>
-                        <div className="text-xs text-gray-300 text-center truncate">{ws.active_operator || "-"}</div>
-                         <div className="text-[10px] text-gray-400 text-center truncate">{ws.current_status || "-"}</div>
-                        {showElapsed ? (
-                          <Elapsed since={info?.at} className={`text-[11px] text-center truncate ${
-                            variant.bg.includes("blue") ? "text-blue-400" : "text-gray-400"
-                          }`} />
-                        ) : showWaitingElapsed && info?.at ? (
-                          <div className="text-[11px] text-amber-400 text-center truncate font-semibold">
-                            <Elapsed since={info?.at} isPaused={isPausedWaiting} />
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-gray-400 text-center truncate">
-                            {formatEst(durations.find(d => d.workstation === ws.workstation)?.actual_duration || null)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Product status cards - Kanban Board */}
         <div className="space-y-3">
@@ -426,7 +453,10 @@ export default function TimelineContent({
                     const totalFinishedQc = Number(product.jumlah_finish_good) || 0;
                     const tanggalSelesai = product.tanggal_selesai ? new Date(product.tanggal_selesai) : null;
                     const today = new Date();
-                    const presentase = total > 0 ? Math.round((jumlahTungguQc / total) * 100) : 0;
+                    const presentaseFromTable = Number(product.percentage);
+                    const presentase = Number.isFinite(presentaseFromTable)
+                      ? presentaseFromTable
+                      : (total > 0 ? Math.round((jumlahTungguQc / total) * 100) : 0);
                     
                     // Tentukan status berdasarkan kondisi
                     let status = 'To Do';
@@ -460,7 +490,11 @@ export default function TimelineContent({
                             <div className="space-y-0.5 min-w-0 leading-tight">
                               <div className="text-sm font-semibold text-white truncate">{product.product_name || "-"}</div>
                               <div className="text-xs text-gray-300 truncate">Trainset {product.trainset ?? "-"}</div>
-                              <div className="text-xs text-gray-400 truncate">Personil: {product.total_personil || "-"}</div>
+                              <div className="text-xs text-gray-400 truncate">
+                                {isLantai12
+                                  ? `Proses: ${product.proses_produk ?? "-"}`
+                                  : `Personil: ${product.total_personil ?? "-"}`}
+                              </div>
                               <Badge className={`border-0 text-xs font-semibold ${statusBg} text-white`}>
                                 {status}
                               </Badge>
@@ -524,10 +558,20 @@ export default function TimelineContent({
                               )}
                             </div>
                             <div className="flex flex-col gap-0 text-right shrink-0 leading-tight">
-                              <div className="text-xs text-gray-400">Estimasi</div>
-                              <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
-                              <div className="text-xs text-gray-400 mt-0.5">Target</div>
-                              <div className="text-xs text-gray-300">{formatEst(card.total_duration)}</div>
+                              {hideKanbanEstimateTarget ? (
+                                <>
+                                  <div className="text-xs text-gray-200 font-bold">{formatProgressCount(card)}</div>
+                                  <div className="text-xs text-gray-300 whitespace-nowrap">{card.process_name || "-"}</div>
+                                  <div className="text-xs text-gray-300 mt-0.5">{formatPercentage(card.percentage)}</div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="text-xs text-gray-400">Estimasi</div>
+                                  <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
+                                  <div className="text-xs text-gray-400 mt-0.5">Target</div>
+                                  <div className="text-xs text-gray-300">{formatEst(card.total_duration)}</div>
+                                </>
+                              )}
                             </div>
                           </div>
                         </CardContent>
@@ -563,12 +607,31 @@ export default function TimelineContent({
                               <Badge className="bg-blue-600 text-white border-0 text-xs">{card.status || "Tunggu QC"}</Badge>
                             </div>
                             <div className="flex flex-col gap-0 text-right shrink-0 leading-tight">
-                              <div className="text-xs text-gray-400">Estimasi</div>
-                              <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
+                              {hideKanbanEstimateTarget ? (
+                                <>
+                                  <div className="text-xs text-gray-200 font-bold">{formatProgressCount(card)}</div>
+                                  <div className="text-xs text-gray-300 whitespace-nowrap">{card.process_name || "-"}</div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="text-xs text-gray-400">Estimasi</div>
+                                  <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.estimated_finish)}</div>
+                                </>
+                              )}
                               <div className="text-xs text-gray-400 mt-0.5">Selesai</div>
-                              <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.finish_actual)}</div>
-                              <div className="text-xs text-gray-400 mt-0.5">Target</div>
-                              <div className="text-xs text-gray-300">{formatEst(card.total_duration)}</div>
+                              <div className="text-xs text-gray-300 whitespace-nowrap">
+                                {hideKanbanEstimateTarget ? formatDateTime(card.start_actual) : formatDateTime(card.finish_actual)}
+                              </div>
+                              {!hideKanbanEstimateTarget ? (
+                                <>
+                                  <div className="text-xs text-gray-400 mt-0.5">Target</div>
+                                  <div className="text-xs text-gray-300">{formatEst(card.total_duration)}</div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="text-xs text-gray-300 mt-0.5">{formatPercentage(card.percentage)}</div>
+                                </>
+                              )}
                             </div>
                           </div>
                         </CardContent>
@@ -604,8 +667,19 @@ export default function TimelineContent({
                               <Badge className="bg-emerald-600 text-white border-0 text-xs">Finish Good</Badge>
                             </div>
                             <div className="flex flex-col gap-0 text-right shrink-0 leading-tight">
+                              {hideKanbanEstimateTarget ? (
+                                <>
+                                  <div className="text-xs text-gray-200 font-bold">{formatProgressCount(card)}</div>
+                                  <div className="text-xs text-gray-300 whitespace-nowrap">{card.process_name || "-"}</div>
+                                </>
+                              ) : null}
                               <div className="text-xs text-gray-400 mt-0.5">Selesai</div>
                               <div className="text-xs text-gray-300 whitespace-nowrap">{formatDateTime(card.start_actual)}</div>
+                              {hideKanbanEstimateTarget ? (
+                                <>
+                                  <div className="text-xs text-gray-300 mt-0.5">{formatPercentage(card.percentage)}</div>
+                                </>
+                              ) : null}
                             </div>
                           </div>
                         </CardContent>
@@ -624,7 +698,7 @@ export default function TimelineContent({
     {/* Title */}
     <div className="text-white font-semibold mb-4 flex items-center gap-2">
       <Users className="w-4 h-4 text-blue-400" />
-      Operator Aktif Hari Ini
+      {isLantai12 ? "Operator yang melapor di 24 jam terakhir" : "Operator Aktif Hari Ini"}
     </div>
 
     {/* Grid Operator */}
@@ -686,7 +760,7 @@ export default function TimelineContent({
       ) : (
         <div className="col-span-full text-center py-8">
           <p className="text-gray-500 text-sm">
-            Tidak ada data operator untuk hari ini
+            {isLantai12 ? "Tidak ada data operator pada 24 jam terakhir" : "Tidak ada data operator untuk hari ini"}
           </p>
         </div>
       )}

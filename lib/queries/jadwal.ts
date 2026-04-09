@@ -29,6 +29,7 @@ export interface JadwalRow {
   finish_actual?: string | Date | null;
   operator_actual_name?: string | null;
   total_ideal_time_qc?: number | null;
+  qty_progress?: number | null;
 }
 
 export interface StatisticRow {
@@ -226,45 +227,38 @@ export async function getProcessBarLantai1(): Promise<JadwalRow[]> {
 
 export async function getProcessBarByLine(line: string): Promise<JadwalRow[]> {
   try {
-        const progressTable = getProductionProgressTableByLine(line);
+    const progressTable = getProductionProgressTableByLine(line);
+    const normalizedLine = (line ?? '').trim().toLowerCase();
+    const isLantai12 = normalizedLine === 'lantai 1' || normalizedLine === 'lantai 2';
     const result = await db.execute(sql`
 SELECT
   id_product,
   id_perproduct,
-
   ANY_VALUE(operator_actual_name) AS operator_actual_name,
-
   MAX(product_name) AS product_name,
-
   MIN(CASE 
         WHEN status = 'On Progress'
         THEN start_actual
       END) AS start_actual,
-
   MAX(CASE 
         WHEN status = 'Tunggu QC'
         THEN start_actual
       END) AS finish_actual,
-
   CAST(
     RIGHT(SUBSTRING_INDEX(id_perproduct, '/', -1), 2)
   AS UNSIGNED) AS trainset,
-  
   SUM(CASE 
         WHEN status = 'Finish Good' THEN 1 
         ELSE 0 
       END) AS jumlah_finish_good
-
+  ${isLantai12 ? sql`,MAX(COALESCE(qty_progress, 0)) AS qty_progress` : sql`,NULL AS qty_progress`}
 FROM ${progressTable}
-
 WHERE 
   status IN ('On Progress', 'Tunggu QC', 'Finish Good')
-    AND line = ${line}
-
+  AND line = ${line}
 GROUP BY
   id_product,
   id_perproduct
-
 ORDER BY start_actual ASC;
     `);
 
@@ -285,25 +279,42 @@ export async function getProcessBarLantai3(): Promise<JadwalRow[]> {
 export async function getScheduleStatistics(monthYear?: string, line: string = 'Lantai 3'): Promise<StatisticRow[]> {
   try {
     const progressTable = getProductionProgressTableByLine(line);
-        const now = new Date();
-        let targetYear = now.getFullYear();
-        let targetMonth = now.getMonth() + 1;
+    const normalizedLine = (line ?? '').trim().toLowerCase();
+    const isLantai12 = normalizedLine === 'lantai 1' || normalizedLine === 'lantai 2';
+    
+    const now = new Date();
+    let targetYear = now.getFullYear();
+    let targetMonth = now.getMonth() + 1;
 
-        if (monthYear && /^\d{4}-\d{2}$/.test(monthYear)) {
-            const [yearText, monthText] = monthYear.split("-");
-            const parsedYear = Number(yearText);
-            const parsedMonth = Number(monthText);
+    if (monthYear && /^\d{4}-\d{2}$/.test(monthYear)) {
+        const [yearText, monthText] = monthYear.split("-");
+        const parsedYear = Number(yearText);
+        const parsedMonth = Number(monthText);
 
-            if (
-                Number.isFinite(parsedYear) &&
-                Number.isFinite(parsedMonth) &&
-                parsedMonth >= 1 &&
-                parsedMonth <= 12
-            ) {
-                targetYear = parsedYear;
-                targetMonth = parsedMonth;
-            }
+        if (
+            Number.isFinite(parsedYear) &&
+            Number.isFinite(parsedMonth) &&
+            parsedMonth >= 1 &&
+            parsedMonth <= 12
+        ) {
+            targetYear = parsedYear;
+            targetMonth = parsedMonth;
         }
+    }
+
+    // Define count expressions based on line type
+    const countTungguQc = isLantai12
+      ? sql`COALESCE(SUM(pp.qty_progress), 0)`
+      : sql`COUNT(DISTINCT pp.id_perproduct)`;
+    const countFinishGood = isLantai12
+      ? sql`COALESCE(SUM(pp.qty_progress), 0)`
+      : sql`COUNT(DISTINCT pp.id_perproduct)`;
+    const countOnProgress = isLantai12
+      ? sql`COALESCE(SUM(pp.qty_progress), 0)`
+      : sql`COUNT(DISTINCT pp.id_perproduct)`;
+    const countKurangKomponen = isLantai12
+      ? sql`COALESCE(SUM(pp.qty_progress), 0)`
+      : sql`COUNT(DISTINCT pp.id_perproduct)`;
 
     const result = await db.execute(sql`
 SELECT
@@ -407,7 +418,7 @@ FROM
 CROSS JOIN
 (
     SELECT 
-        COUNT(DISTINCT pp.id_perproduct) AS total_tunggu_qc
+        ${countTungguQc} AS total_tunggu_qc
     FROM ${progressTable} pp
     WHERE 
         pp.status = 'Tunggu QC'
@@ -420,7 +431,7 @@ CROSS JOIN
 CROSS JOIN
 (
     SELECT  
-        COUNT(DISTINCT pp.id_perproduct) AS total_finish_good
+        ${countFinishGood} AS total_finish_good
     FROM ${progressTable} pp
     WHERE 
         pp.status = 'Finish Good'
@@ -433,7 +444,7 @@ CROSS JOIN
 CROSS JOIN
 (
     SELECT     
-        COUNT(DISTINCT pp.id_perproduct) AS total_on_progress
+        ${countOnProgress} AS total_on_progress
     FROM ${progressTable} pp
     WHERE      
         pp.status = 'On Progress'     
@@ -491,7 +502,7 @@ CROSS JOIN
 CROSS JOIN
 (
     SELECT     
-        COUNT(DISTINCT pp.id_perproduct) AS total_kurang_komponen
+        ${countKurangKomponen} AS total_kurang_komponen
     FROM ${progressTable} pp
     WHERE      
         pp.status = 'Kurang Komponen'     

@@ -909,7 +909,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                                   left: `${leftPercent}%`,
                                   width: `${Math.max(widthPercent, 2)}%`,
                                 }}
-                                title={`${row.product_name}\nLine: ${row.line || '-'}\nJumlah Tiap TS: ${row.jumlah_tiapts ?? '-'}\nPersonil: ${row.total_personil ?? '-'}\nDurasi: ${formatIdealTime(row.total_ideal_time_qc)}\nMulai: ${formatDate(row.tanggal_mulai)}\nSelesai: ${formatDate(row.tanggal_selesai)}`}
+                                title={`${row.product_name}\nTrainset: ${row.trainset ?? '-'}\nLine: ${row.line || '-'}\nJumlah Tiap TS: ${row.jumlah_tiapts ?? '-'}\nPersonil: ${row.total_personil ?? '-'}\nDurasi: ${formatIdealTime(row.total_ideal_time_qc)}\nMulai: ${formatDate(row.tanggal_mulai)}\nSelesai: ${formatDate(row.tanggal_selesai)}`}
                               >
                                 <div className="truncate">{row.product_name || '-'} x {row.jumlah_tiapts ?? '-'}</div>
                               </div>
@@ -947,15 +947,19 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                                     return (a.id_perproduct || '').localeCompare(b.id_perproduct || '');
                                   });
 
+                                const normalizedSelectedLine = (selectedLine ?? '').trim().toLowerCase();
+                                const isSelectedLantai12 = normalizedSelectedLine === 'lantai 1' || normalizedSelectedLine === 'lantai 2';
                                 const barNumberById = new Map<string, number>();
-
-                                processItemsInRange.forEach((item) => {
-                                  const id = (item.id_perproduct || '').trim();
-                                  if (!id) return;
-                                  if (!barNumberById.has(id)) {
-                                    barNumberById.set(id, barNumberById.size + 1);
-                                  }
-                                });
+                                
+                                if (!isSelectedLantai12) {
+                                  processItemsInRange.forEach((item) => {
+                                    const id = (item.id_perproduct || '').trim();
+                                    if (!id) return;
+                                    if (!barNumberById.has(id)) {
+                                      barNumberById.set(id, barNumberById.size + 1);
+                                    }
+                                  });
+                                }
 
                                 processItemsInRange.forEach((processItem, pIdx) => {
                                   if (!processItem.start_actual && !processItem.finish_actual) return;
@@ -979,9 +983,11 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
 
                                     const operatorName = processItem.operator_actual_name || 'Unknown';
                                     const idProd = processItem.id_perproduct || '-';
-                                    const barNumber = processItem.id_perproduct
-                                      ? (barNumberById.get(processItem.id_perproduct) || pIdx + 1)
-                                      : pIdx + 1;
+                                    const barNumber = isSelectedLantai12 && processItem.qty_progress
+                                      ? processItem.qty_progress
+                                      : (processItem.id_perproduct
+                                        ? (barNumberById.get(processItem.id_perproduct) || pIdx + 1)
+                                        : pIdx + 1);
                                     const hoverText = `ID: ${idProd}\nTrainset: ${processItem.trainset ?? row.trainset ?? '-'}\nOperator: ${operatorName}\n${processItem.product_name || '-'}\nStart: ${formatDate(startDate)}\nFinish: ${formatDate(finishDate)}`;
                                     
                                     progressBars.push(

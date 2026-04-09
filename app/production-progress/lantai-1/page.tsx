@@ -87,6 +87,7 @@ export default async function Lantai1Page({ searchParams }: { searchParams: Prom
         forcedStep={forcedStep}
         lineLabel={lineLabel}
         apiLine={lineLabel}
+        showWorkstationTimeline={false}
       />
     </ModernSidebar>
   );

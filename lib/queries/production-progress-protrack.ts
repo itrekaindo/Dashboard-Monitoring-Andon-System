@@ -485,6 +485,7 @@ export interface ProductStatusCard {
   id_product: string;
   id_perproduct: string | null;
   product_name: string | null;
+  process_name: string | null;
   operator_actual_name: string | null;
   start_actual: Date | string | null;
   finish_actual: Date | string | null;
@@ -784,6 +785,7 @@ SELECT
   l.id_product,
   l.id_perproduct,
   l.product_name,
+  l.process_name,
   l.operator_actual_name,
   ws1.ws1_start_actual as start_actual,
   l.finish_actual,
@@ -1021,6 +1023,7 @@ SELECT
     j.product_name, 
     j.trainset, 
     j.total_personil,
+  j.proses_produk,
     j.jumlah_tiapts as total,
     j.tanggal_mulai, 
     j.tanggal_selesai,

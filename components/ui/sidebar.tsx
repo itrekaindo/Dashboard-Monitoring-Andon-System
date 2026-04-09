@@ -307,11 +307,6 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
           label: 'Lantai 1 Candisewu',
           path: '/production-progress/lantai-1'
         },
-        {
-          id: 'production-log',
-          label: 'Riwayat Data Kanban',
-          path: '/production/logs'
-        }
       ]
     }
   ];
