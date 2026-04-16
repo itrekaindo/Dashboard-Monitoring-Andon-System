@@ -4,7 +4,13 @@ import type { NextRequest } from "next/server";
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Allow public assets and common static files without auth.
+  const isStaticAsset =
+    pathname.startsWith("/assets") ||
+    /\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|map|txt|xml|json)$/i.test(pathname);
+
   if (
+    isStaticAsset ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/login") ||
     pathname.startsWith("/api/logout") ||

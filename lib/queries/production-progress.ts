@@ -1127,37 +1127,44 @@ SELECT
     j.trainset, 
     j.total_personil,
     j.proses_produk,
-    j.jumlah_tiapts as total,
+    j.jumlah_tiapts AS total,
     j.tanggal_mulai, 
     j.tanggal_selesai,
     COALESCE(p.jumlah_tunggu_qc, 0) AS jumlah_tunggu_qc,
     COALESCE(p.jumlah_finish_good, 0) AS jumlah_finish_good,
     0 AS percentage
 FROM 
-    jadwal as j 
+    jadwal AS j 
 LEFT JOIN 
     (
         SELECT 
             id_product, 
-      trainset,
-            -- Hitung Tunggu QC
-            SUM(CASE WHEN status = 'Tunggu QC' THEN 1 ELSE 0 END) AS jumlah_tunggu_qc,
-            -- Hitung Finish Good
-            SUM(CASE WHEN status = 'Finish Good' THEN 1 ELSE 0 END) AS jumlah_finish_good
+            trainset,
+
+            -- ✅ DISTINCT per id_perproduct
+            COUNT(DISTINCT CASE 
+                WHEN status = 'Tunggu QC' 
+                THEN id_perproduct 
+            END) AS jumlah_tunggu_qc,
+
+            COUNT(DISTINCT CASE 
+                WHEN status = 'Finish Good' 
+                THEN id_perproduct 
+            END) AS jumlah_finish_good
+
         FROM ${progressTable}
         WHERE 
-            -- Filter: Hanya ambil progress yang start_actual-nya bulan ini
             MONTH(start_actual) = MONTH(CURRENT_DATE()) 
             AND YEAR(start_actual) = YEAR(CURRENT_DATE())
-          GROUP BY id_product, trainset
+        GROUP BY 
+            id_product, trainset
     ) p 
     ON j.id_product = p.id_product
-        AND j.trainset = p.trainset
+    AND j.trainset = p.trainset
 WHERE 
-    -- Filter: Hanya ambil jadwal yang tanggal_mulai-nya bulan ini
     MONTH(j.tanggal_mulai) = MONTH(CURRENT_DATE()) 
     AND YEAR(j.tanggal_mulai) = YEAR(CURRENT_DATE())
-  ${line ? sql`AND j.line = ${line}` : sql``}
+    ${line ? sql`AND j.line = ${line}` : sql``}
 ORDER BY 
     j.tanggal_selesai ASC;
     `);

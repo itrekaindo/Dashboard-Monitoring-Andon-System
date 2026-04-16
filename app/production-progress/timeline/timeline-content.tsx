@@ -166,6 +166,7 @@ export default function TimelineContent({
 }: TimelineContentProps) {
   const normalizedLine = (apiLine ?? "").trim().toLowerCase();
   const isLantai12 = normalizedLine === "lantai 1" || normalizedLine === "lantai 2";
+  const isLantai3 = normalizedLine === "lantai 3";
   const hideKanbanEstimateTarget = isLantai12;
 
   const [stats, setStats] = useState<ProductionStats>(initialStats);
@@ -454,9 +455,11 @@ export default function TimelineContent({
                     const tanggalSelesai = product.tanggal_selesai ? new Date(product.tanggal_selesai) : null;
                     const today = new Date();
                     const presentaseFromTable = Number(product.percentage);
-                    const presentase = Number.isFinite(presentaseFromTable)
-                      ? presentaseFromTable
-                      : (total > 0 ? Math.round((jumlahTungguQc / total) * 100) : 0);
+                    const presentase = isLantai3
+                      ? (total > 0 ? Math.round((jumlahTungguQc / total) * 100) : 0)
+                      : (Number.isFinite(presentaseFromTable)
+                        ? presentaseFromTable
+                        : (total > 0 ? Math.round((jumlahTungguQc / total) * 100) : 0));
                     
                     // Tentukan status berdasarkan kondisi
                     let status = 'To Do';

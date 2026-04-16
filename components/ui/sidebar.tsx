@@ -10,6 +10,7 @@ import {
   Settings, 
   Users, 
   FileText,
+  Package,
   Search,
   LogOut,
   HelpCircle,
@@ -201,6 +202,7 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
     if (pathname.startsWith('/schedule/lantai-1')) return 'schedule-lantai1';
     if (pathname.startsWith('/schedule/lantai-2')) return 'schedule-lantai2';
     if (pathname.startsWith('/schedule')) return 'schedule-lantai3';
+    if (pathname === '/product' || pathname.startsWith('/product/')) return 'product';
     if (pathname.startsWith('/product-tracking')) return 'product-tracking';
     if (pathname.startsWith('/production-progress/lantai-1')) return 'production-lantai1';
     if (pathname.startsWith('/production-progress/lantai-2')) return 'production-lantai2';
@@ -281,6 +283,14 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
         }
       ]
     },
+    /*
+    {
+      id: 'product',
+      label: 'Product',
+      icon: Package,
+      path: '/product'
+    },
+    */
     {
       id: 'product-tracking',
       label: 'Product Tracking',
