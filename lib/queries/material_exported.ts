@@ -11,7 +11,7 @@ export interface MaterialExported {
   deskripsi: string | null;
   spesifikasi: string | null;
   qty_diminta: number;
-  qty_diserahkan: number;
+  qty_diserahkan: number | null;
   qty_diterima: number | null;
   satuan: string | null;
   pic: string | null;
@@ -29,7 +29,7 @@ export interface MaterialExportedInsertRow {
   deskripsi: string | null;
   spesifikasi: string | null;
   qty_diminta: number;
-  qty_diserahkan: number;
+  qty_diserahkan: number | null;
   satuan: string | null;
   keterangan: string | null;
 }
@@ -93,7 +93,7 @@ export async function insertMaterialsExported(params: {
           ${row.deskripsi},
           ${row.spesifikasi},
           ${row.qty_diminta},
-          ${row.qty_diserahkan},
+           ${null},
           ${null},
           ${row.satuan},
           ${cleanedPic},

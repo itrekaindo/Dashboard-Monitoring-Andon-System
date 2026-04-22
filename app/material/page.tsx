@@ -1,5 +1,7 @@
 import ModernSidebar from "@/components/ui/sidebar";
 import { Card, CardContent } from "@/components/ui/card";
+import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
 import {
   getAllMaterials,
   getDistinctProducts,
@@ -12,6 +14,10 @@ import MaterialTable from "./material-table";
 interface MaterialPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
+
+type JwtPayload = {
+  role?: string;
+};
 
 function monthToRoman(month: number): string {
   const romanNumerals = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
@@ -41,6 +47,21 @@ export default async function MaterialPage({ searchParams }: MaterialPageProps) 
     : resolvedSearchParams?.no_kpm;
   const noKpm = (noKpmParam ?? "").trim();
 
+  let canManageMaterialDelivery = false;
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
+    const secret = process.env.JWT_SECRET;
+
+    if (token && secret) {
+      const decoded = jwt.verify(token, secret) as JwtPayload;
+      canManageMaterialDelivery =
+        decoded?.role === "PENGENDALIAN" || decoded?.role === "ADMIN";
+    }
+  } catch {
+    canManageMaterialDelivery = false;
+  }
+
   const [products, materials, latestNoKpm] = await Promise.all([
     getDistinctProducts(),
     selectedProduct ? getMaterialByProduct(selectedProduct) : getAllMaterials(),
@@ -60,9 +81,9 @@ export default async function MaterialPage({ searchParams }: MaterialPageProps) 
     <ModernSidebar>
       <div className="p-6 sm:p-8 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Master Material</h1>
+          <h1 className="text-2xl font-bold text-white">Pengiriman Material</h1>
           <p className="text-sm text-gray-400 mt-1">
-            Tampilkan data berdasarkan produk dari tabel master_material.
+            Menu untuk Mencetak Kartu Pengiriman Material Digital.
           </p>
         </div>
 
@@ -76,6 +97,7 @@ export default async function MaterialPage({ searchParams }: MaterialPageProps) 
               nama={nama}
               noKpm={noKpm}
               noKpmOptions={noKpmOptions}
+              canManageMaterialDelivery={canManageMaterialDelivery}
             />
           </CardContent>
         </Card>
@@ -89,6 +111,7 @@ export default async function MaterialPage({ searchParams }: MaterialPageProps) 
               noKpm={noKpm}
               pic={nama}
               selectedProduct={selectedProduct}
+              canManageMaterialDelivery={canManageMaterialDelivery}
             />
           </CardContent>
         </Card>

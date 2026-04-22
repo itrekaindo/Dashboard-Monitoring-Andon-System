@@ -495,7 +495,7 @@ export default function TimelineContent({
                               <div className="text-xs text-gray-300 truncate">Trainset {product.trainset ?? "-"}</div>
                               <div className="text-xs text-gray-400 truncate">
                                 {isLantai12
-                                  ? `Proses: ${product.proses_produk ?? "-"}`
+                                  ? `${product.proses_produk ?? "-"}`
                                   : `Personil: ${product.total_personil ?? "-"}`}
                               </div>
                               <Badge className={`border-0 text-xs font-semibold ${statusBg} text-white`}>

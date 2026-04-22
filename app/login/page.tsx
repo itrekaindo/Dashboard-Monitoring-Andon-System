@@ -1,11 +1,12 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { LogIn, User, Lock, AlertCircle } from "lucide-react";
 import Image from "next/image";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -26,7 +27,21 @@ export default function LoginPage() {
       setErr(data.message ?? "Login gagal");
       return;
     }
-    router.push("/");
+
+    const redirectParam = searchParams.get("redirect");
+    const qParam = searchParams.get("q");
+
+    if (redirectParam) {
+      router.replace(redirectParam);
+      return;
+    }
+
+    if (qParam) {
+      router.replace(`/product-tracking?q=${encodeURIComponent(qParam)}`);
+      return;
+    }
+
+    router.replace("/");
   };
 
   return (
@@ -133,5 +148,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-950" />}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

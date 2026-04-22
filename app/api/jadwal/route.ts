@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import jwt from "jsonwebtoken";
+import { eq } from "drizzle-orm";
+import { authUsers } from "@/lib/schema/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +29,76 @@ type JadwalPayload = {
   operator_assigned3: string | null;
 };
 
+type JwtPayload = {
+  uid?: number;
+};
+
 function parseRowResult(result: any) {
   return Array.isArray(result) ? (Array.isArray(result[0]) ? result[0] : result) : [];
+}
+
+function extractTokenFromCookieHeader(cookieHeader: string | null) {
+  if (!cookieHeader) return "";
+  const tokenPart = cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("token="));
+
+  if (!tokenPart) return "";
+  return decodeURIComponent(tokenPart.slice("token=".length));
+}
+
+async function authorizeScheduleMutation(request: Request) {
+  const token = extractTokenFromCookieHeader(request.headers.get("cookie"));
+  if (!token) {
+    return { ok: false as const, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
+
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: "JWT_SECRET belum diset" }, { status: 500 }),
+    };
+  }
+
+  let userId = 0;
+  try {
+    const decoded = jwt.verify(token, secret) as JwtPayload;
+    userId = Number(decoded?.uid || 0);
+  } catch {
+    return { ok: false as const, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
+
+  if (!userId) {
+    return { ok: false as const, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
+
+  const users = await db
+    .select({ role: authUsers.role, isActive: authUsers.isActive })
+    .from(authUsers)
+    .where(eq(authUsers.id, userId))
+    .limit(1);
+
+  const user = users[0];
+  if (!user || Number(user.isActive) !== 1) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: "Akun nonaktif atau tidak ditemukan." }, { status: 403 }),
+    };
+  }
+
+  if (user.role !== "PERENCANAAN" && user.role !== "ADMIN") {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { error: "Hanya user role PERENCANAAN atau ADMIN yang boleh mengubah jadwal." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return { ok: true as const };
 }
 
 function getProductionProgressTableByLine(line?: string) {
@@ -100,6 +171,7 @@ export async function GET(request: Request) {
 SELECT 
   j.id_product, 
   j.product_name,
+  j.proses_produk,
   j.project,
   j.trainset, 
   j.jumlah_tiapts,
@@ -178,6 +250,7 @@ ORDER BY j.tanggal_mulai ASC;
         SELECT 
           j.id_product, 
           j.product_name,
+          j.proses_produk,
           j.project,
           j.trainset, 
           j.jumlah_tiapts,
@@ -256,6 +329,9 @@ ORDER BY j.tanggal_mulai ASC;
 
 export async function POST(request: Request) {
   try {
+    const auth = await authorizeScheduleMutation(request);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const payload = normalizePayload(body);
     if (!payload) {
@@ -278,6 +354,9 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const auth = await authorizeScheduleMutation(request);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const key = normalizeKey(body?.key);
     const payload = normalizePayload(body?.data);
@@ -315,6 +394,9 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const auth = await authorizeScheduleMutation(request);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const key = normalizeKey(body);
     if (!key) {

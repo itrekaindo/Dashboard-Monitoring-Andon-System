@@ -10,6 +10,8 @@ export interface Material {
   satuan: string | null;
   produk: string | null;
   id_produk: string | null;
+  stok_warehouse: number | null;
+  stok_ppc: number | null;
 }
 
 export async function getAllMaterials(): Promise<Material[]> {
@@ -50,9 +52,25 @@ export async function getDistinctProducts(): Promise<string[]> {
 export async function getMaterialByProduct(product: string): Promise<Material[]> {
   try {
     const result = await db.execute(sql`
-      SELECT * FROM master_material
-      WHERE produk = ${product}
-      ORDER BY no ASC
+      SELECT 
+        mm.*,
+        sm.stok_warehouse,
+        sm.stok_ppc
+      FROM master_material mm
+      LEFT JOIN (
+        SELECT s1.*
+        FROM stok_material s1
+        INNER JOIN (
+          SELECT komat, MAX(no) as max_no
+          FROM stok_material
+          GROUP BY komat
+        ) s2 
+        ON s1.komat = s2.komat 
+        AND s1.no = s2.max_no
+      ) sm 
+      ON mm.komat = sm.komat
+      WHERE mm.produk = ${product}
+      ORDER BY mm.no ASC
     `);
     
     const rows = Array.isArray(result[0]) ? result[0] : result;

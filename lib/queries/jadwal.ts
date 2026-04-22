@@ -12,6 +12,8 @@ function getProductionProgressTableByLine(line?: string) {
 export interface JadwalRow {
   id_product: string | null;
   product_name: string | null;
+    proses_produk?: string | null;
+    process_name?: string | null;
   project: string | null;
   trainset: number | null;
   jumlah_tiapts: number | null;
@@ -105,6 +107,7 @@ export async function getTabelJadwalByLine(line: string): Promise<JadwalRow[]> {
 SELECT  
     j.id_product, 
     j.product_name,
+    j.proses_produk,
     j.project,
     j.trainset, 
     j.jumlah_tiapts,
@@ -229,11 +232,24 @@ export async function getProcessBarByLine(line: string): Promise<JadwalRow[]> {
   try {
     const progressTable = getProductionProgressTableByLine(line);
     const normalizedLine = (line ?? '').trim().toLowerCase();
+        const isLantai1 = normalizedLine === 'lantai 1';
     const isLantai12 = normalizedLine === 'lantai 1' || normalizedLine === 'lantai 2';
+        const processNameSelect = isLantai1
+            ? sql`
+                    MAX(
+                        CASE
+                            WHEN LOWER(process_name) IN ('cutting', 'punching')
+                            THEN 'Fabrikasi (Mesin 3 in 1)'
+                            ELSE process_name
+                        END
+                    ) AS process_name
+                `
+            : sql`MAX(process_name) AS process_name`;
     const result = await db.execute(sql`
 SELECT
   id_product,
   id_perproduct,
+    ${processNameSelect},
   ANY_VALUE(operator_actual_name) AS operator_actual_name,
   MAX(product_name) AS product_name,
   MIN(CASE 
@@ -279,8 +295,8 @@ export async function getProcessBarLantai3(): Promise<JadwalRow[]> {
 export async function getScheduleStatistics(monthYear?: string, line: string = 'Lantai 3'): Promise<StatisticRow[]> {
   try {
     const progressTable = getProductionProgressTableByLine(line);
-    const normalizedLine = (line ?? '').trim().toLowerCase();
-    const isLantai12 = normalizedLine === 'lantai 1' || normalizedLine === 'lantai 2';
+        const normalizedLine = (line ?? '').trim().toLowerCase();
+        const isLantai12 = normalizedLine === 'lantai 1' || normalizedLine === 'lantai 2';
     
     const now = new Date();
     let targetYear = now.getFullYear();
@@ -302,19 +318,11 @@ export async function getScheduleStatistics(monthYear?: string, line: string = '
         }
     }
 
-    // Define count expressions based on line type
-    const countTungguQc = isLantai12
-      ? sql`COALESCE(SUM(pp.qty_progress), 0)`
-      : sql`COUNT(DISTINCT pp.id_perproduct)`;
-    const countFinishGood = isLantai12
-      ? sql`COALESCE(SUM(pp.qty_progress), 0)`
-      : sql`COUNT(DISTINCT pp.id_perproduct)`;
-    const countOnProgress = isLantai12
-      ? sql`COALESCE(SUM(pp.qty_progress), 0)`
-      : sql`COUNT(DISTINCT pp.id_perproduct)`;
-    const countKurangKomponen = isLantai12
-      ? sql`COALESCE(SUM(pp.qty_progress), 0)`
-      : sql`COUNT(DISTINCT pp.id_perproduct)`;
+        // Count each product item directly using unique id_perproduct.
+        const countTungguQc = sql`COUNT(DISTINCT pp.id_perproduct)`;
+        const countFinishGood = sql`COUNT(DISTINCT pp.id_perproduct)`;
+        const countOnProgress = sql`COUNT(DISTINCT pp.id_perproduct)`;
+        const countKurangKomponen = sql`COUNT(DISTINCT pp.id_perproduct)`;
 
     const result = await db.execute(sql`
 SELECT
@@ -402,12 +410,16 @@ FROM
 
 /* ================= TARGET ================= */
 (
-    SELECT 
-        SUM(jumlah_tiapts) AS total_target_ts
+    SELECT
+        ${isLantai12
+          ? sql`COUNT(*)`
+          : sql`SUM(jumlah_tiapts)`} AS total_target_ts
     FROM (
-        SELECT DISTINCT j.id_product, j.trainset, j.jumlah_tiapts
+        SELECT ${isLantai12
+          ? sql`1 AS row_marker`
+          : sql`DISTINCT j.id_product, j.trainset, j.jumlah_tiapts`}
         FROM jadwal j
-        WHERE 
+        WHERE
             MONTH(j.tanggal_selesai) = ${targetMonth}
             AND YEAR(j.tanggal_selesai) = ${targetYear}
             AND j.line = ${line}

@@ -35,7 +35,11 @@ interface StatusHistoryEvent {
   start_actual: Date | string;
   finish_actual?: Date | string;
   process_name?: string;
+  line?: string;
   workstation?: number;
+  note_qc?: string;
+  percentage?: number;
+  source_table?: string;
 }
 
 function ProductTrackingContent() {
@@ -288,8 +292,33 @@ function ProductTrackingContent() {
     }
   };
 
-  // Get status message based on status
-  const getStatusMessage = (status: string, operatorName: string, noteQc?: string): string => {
+  // Get status message based on status and source table
+  const getStatusMessage = (event: StatusHistoryEvent): string => {
+    const status = event.status || '';
+    const operatorName = event.operator_actual_name || 'Operator';
+    const noteQc = event.note_qc;
+
+    if (event.source_table === 'production_progress_protrack') {
+      const lowerStatus = status.toLowerCase();
+      let action = 'memulai';
+
+      if (lowerStatus.includes('istirahat')) {
+        action = 'menjeda';
+      } else if (lowerStatus.includes('kurang komponen')) {
+        action = 'melaporkan kekurangan komponen pada';
+      } else if (lowerStatus.includes('tunggu qc') || lowerStatus.includes('selesai')) {
+        action = 'menyelesaikan';
+      } else if (lowerStatus.includes('finish good') || lowerStatus.includes('not ok')) {
+        action = 'memverifikasi';
+      }
+
+      const percentageText = Number.isFinite(event.percentage) ? `${event.percentage}% ` : '';
+      const processText = event.process_name?.trim() || 'proses';
+      const componentNote = lowerStatus.includes('kurang komponen') && noteQc ? ` : ${noteQc}` : '';
+
+      return `${operatorName} ${action} proses ${processText}${componentNote} ( ${percentageText})`.replace(/\s+/g, ' ').trim();
+    }
+
     const statusMap: { [key: string]: string } = {
       'On Progress': `${operatorName} memulai proses Assembling`,
       'Tunggu QC': `${operatorName} menyelesaikan proses Assembling`,
@@ -796,8 +825,11 @@ function ProductTrackingContent() {
                                       <Badge className={`${eventStatusColor.bg} ${eventStatusColor.text} border-0 text-xs`}>
                                         {event.status}
                                       </Badge>
+                                      <p className="text-xs text-gray-400">
+                                        {event.line?.trim() || '-'}
+                                      </p>
                                       <p className="text-sm text-gray-300">
-                                        {getStatusMessage(event.status, event.operator_actual_name || 'Operator')}
+                                         {getStatusMessage(event)}
                                       </p>
                                     </div>
                                   </div>

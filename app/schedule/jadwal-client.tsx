@@ -216,6 +216,62 @@ function getProductColorByFloor(line: string | null): string {
   return 'bg-gray-500';
 }
 
+function getProductColorByProcess(prosesProduk: string | null | undefined): string {
+  const value = (prosesProduk || '').trim();
+  if (!value) return 'bg-gray-500';
+
+  const colors = [
+    'bg-blue-600',
+    'bg-red-600',
+    'bg-violet-600',
+    'bg-cyan-500',
+    'bg-fuchsia-600',
+    'bg-sky-500',
+    'bg-rose-600',
+    'bg-indigo-600',
+    'bg-pink-600',
+    'bg-purple-500',
+  ];
+
+  // Stable hash so the same proses_produk always gets the same color.
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = value.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  return colors[Math.abs(hash) % colors.length];
+}
+
+function isLantai12(line: string | null | undefined): boolean {
+  const searchText = (line || '').toLowerCase();
+  return (
+    searchText.includes('lantai 2') ||
+    searchText.includes('lt 2') ||
+    searchText.includes('lt2') ||
+    searchText.includes('lantai 1') ||
+    searchText.includes('lt 1') ||
+    searchText.includes('lt1')
+  );
+}
+
+function matchesProcessNameFlexible(jadwalProcess: string | null | undefined, progressProcess: string | null | undefined): boolean {
+  const left = (jadwalProcess || '').trim().toLowerCase();
+  const right = (progressProcess || '').trim().toLowerCase();
+
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.includes(right) || right.includes(left)) return true;
+
+  const splitPattern = /[\s\-_/(),.]+/;
+  const leftTokens = left.split(splitPattern).filter(Boolean);
+  const rightTokens = right.split(splitPattern).filter(Boolean);
+
+  if (!leftTokens.length || !rightTokens.length) return false;
+
+  const rightSet = new Set(rightTokens);
+  return leftTokens.some((token) => rightSet.has(token));
+}
+
 function getDateRange(rows: JadwalRow[]): { minDate: Date; maxDate: Date; totalDays: number } {
   let minDate = new Date();
   let maxDate = new Date();
@@ -260,7 +316,15 @@ function buildHolidayUrl(year: number) {
   return `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(holidayCalendarId)}/events?${params.toString()}`;
 }
 
-export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }: { initialRows: JadwalRow[]; selectedLine?: string }) {
+export default function JadwalClient({
+  initialRows,
+  selectedLine = "Lantai 3",
+  canManageSchedule = false,
+}: {
+  initialRows: JadwalRow[];
+  selectedLine?: string;
+  canManageSchedule?: boolean;
+}) {
   // Get current month-year as default filter
   const getCurrentMonthYear = () => {
     const now = new Date();
@@ -283,6 +347,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
   const [processBarData, setProcessBarData] = useState<JadwalRow[]>([]);
   const [showProgressBar, setShowProgressBar] = useState(false);
   const [statistics, setStatistics] = useState<StatisticRow | null>(null);
+  const statisticsUnitLabel = isLantai12(selectedLine) ? 'Produk' : 'Item';
 
   const currentYear = new Date().getFullYear();
   const holidaySet = useMemo(() => new Set(holidayData.map((item) => item.date)), [holidayData]);
@@ -470,6 +535,11 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
   };
 
   const handleCreate = async () => {
+    if (!canManageSchedule) {
+      alert("Hanya user role PERENCANAAN atau ADMIN yang dapat menambah data jadwal.");
+      return;
+    }
+
     if (!isValidForm(createForm)) {
       alert("Lengkapi ID Product, Product Name, dan Trainset.");
       return;
@@ -505,6 +575,8 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
   };
 
   const toggleCreateForm = () => {
+    if (!canManageSchedule) return;
+
     if (editingKey) {
       setEditingKey(null);
       setEditForm(emptyForm);
@@ -536,6 +608,11 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
   };
 
   const startEdit = (row: JadwalRow) => {
+    if (!canManageSchedule) {
+      alert("Hanya user role PERENCANAAN atau ADMIN yang dapat mengubah data jadwal.");
+      return;
+    }
+
     if (!row.id_product || !row.product_name || row.trainset === null) return;
     if (editingKey?.id_product === row.id_product && 
         editingKey?.product_name === row.product_name && 
@@ -577,6 +654,11 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
   };
 
   const handleUpdate = async () => {
+    if (!canManageSchedule) {
+      alert("Hanya user role PERENCANAAN atau ADMIN yang dapat mengubah data jadwal.");
+      return;
+    }
+
     if (!editingKey) return;
     if (!isValidForm(editForm)) {
       alert("Lengkapi semua field yang diperlukan (*)");
@@ -617,6 +699,11 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
   };
 
   const handleDelete = async (row: JadwalRow) => {
+    if (!canManageSchedule) {
+      alert("Hanya user role PERENCANAAN atau ADMIN yang dapat menghapus data jadwal.");
+      return;
+    }
+
     if (!row.id_product || !row.product_name || row.trainset === null) return;
     const confirmed = window.confirm("Hapus data jadwal ini?");
     if (!confirmed) return;
@@ -701,6 +788,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
         
         // Get unique floors for legend
         const floorsSet = new Set<string>();
+        const processSet = new Set<string>();
         filteredRows.forEach(row => {
           const searchText = (row.line || '').toLowerCase();
           if (searchText.includes('lantai 3') || searchText.includes('lt 3') || searchText.includes('lt3')) {
@@ -710,8 +798,17 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
           } else if (searchText.includes('lantai 1') || searchText.includes('lt 1') || searchText.includes('lt1')) {
             floorsSet.add('Lantai 1');
           }
+
+          if (isLantai12(row.line) && row.proses_produk) {
+            processSet.add(row.proses_produk);
+          }
         });
         const uniqueFloors = Array.from(floorsSet).sort();
+        const uniqueProcesses = Array.from(processSet).sort((a, b) => a.localeCompare(b));
+        const showProcessLegend =
+          uniqueProcesses.length > 0 &&
+          uniqueFloors.length > 0 &&
+          uniqueFloors.every((floor) => floor === 'Lantai 1' || floor === 'Lantai 2');
         
         // Get today's date key for comparison
         const todayKey = toDateKey(today);
@@ -743,17 +840,26 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                   <div className="flex items-center gap-4">
                     {/* Legend */}
                     <div className="flex items-center gap-3 flex-wrap">
-                      {uniqueFloors.map((floor) => {
-                        const floorColor = floor === 'Lantai 3' ? 'bg-blue-500' : 
-                                          floor === 'Lantai 2' ? 'bg-amber-700' : 
-                                          floor === 'Lantai 1' ? 'bg-purple-500' : 'bg-gray-500';
-                        return (
-                          <div key={floor} className="flex items-center gap-2">
-                            <div className={`w-3 h-3 rounded ${floorColor}`}></div>
-                            <span className="text-xs text-gray-300">{floor}</span>
+                      {showProcessLegend ? (
+                        uniqueProcesses.map((proses) => (
+                          <div key={proses} className="flex items-center gap-2">
+                            <div className={`w-3 h-3 rounded ${getProductColorByProcess(proses)}`}></div>
+                            <span className="text-xs text-gray-300">{proses}</span>
                           </div>
-                        );
-                      })}
+                        ))
+                      ) : (
+                        uniqueFloors.map((floor) => {
+                          const floorColor = floor === 'Lantai 3' ? 'bg-blue-500' : 
+                                            floor === 'Lantai 2' ? 'bg-amber-700' : 
+                                            floor === 'Lantai 1' ? 'bg-purple-500' : 'bg-gray-500';
+                          return (
+                            <div key={floor} className="flex items-center gap-2">
+                              <div className={`w-3 h-3 rounded ${floorColor}`}></div>
+                              <span className="text-xs text-gray-300">{floor}</span>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                     {/* Toggle Progress Bar Button */}
                     <button
@@ -848,7 +954,11 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                         const leftPercent = (startOffset / totalDays) * 100;
                         const widthPercent = (duration / totalDays) * 100;
                         
-                        const productColor = getProductColorByFloor(row.line);
+                        const productColor = isLantai12(row.line)
+                          ? (row.proses_produk
+                            ? getProductColorByProcess(row.proses_produk)
+                            : getProductColorByFloor(row.line))
+                          : getProductColorByFloor(row.line);
                         
                         return (
                           <div key={`gantt-${row.id_product}-${idx}`} className="flex border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
@@ -909,7 +1019,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                                   left: `${leftPercent}%`,
                                   width: `${Math.max(widthPercent, 2)}%`,
                                 }}
-                                title={`${row.product_name}\nTrainset: ${row.trainset ?? '-'}\nLine: ${row.line || '-'}\nJumlah Tiap TS: ${row.jumlah_tiapts ?? '-'}\nPersonil: ${row.total_personil ?? '-'}\nDurasi: ${formatIdealTime(row.total_ideal_time_qc)}\nMulai: ${formatDate(row.tanggal_mulai)}\nSelesai: ${formatDate(row.tanggal_selesai)}`}
+                                title={`${row.product_name}\nProses Produk: ${row.proses_produk || '-'}\nTrainset: ${row.trainset ?? '-'}\nLine: ${row.line || '-'}\nJumlah Tiap TS: ${row.jumlah_tiapts ?? '-'}\nPersonil: ${row.total_personil ?? '-'}\nDurasi: ${formatIdealTime(row.total_ideal_time_qc)}\nMulai: ${formatDate(row.tanggal_mulai)}\nSelesai: ${formatDate(row.tanggal_selesai)}`}
                               >
                                 <div className="truncate">{row.product_name || '-'} x {row.jumlah_tiapts ?? '-'}</div>
                               </div>
@@ -917,10 +1027,24 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                               {/* Progress Bar Overlay */}
                               {showProgressBar && (() => {
                                 const progressBars: React.ReactNode[] = [];
-                                const processItems = processBarData.filter((item) => 
-                                  item.id_product === row.id_product && 
-                                  item.trainset === row.trainset
-                                );
+                                const shouldMatchProcessName = isLantai12(row.line);
+                                const normalizedRowProcess = (row.proses_produk || '').trim().toLowerCase();
+                                const processItems = processBarData.filter((item) => {
+                                  if (item.id_product !== row.id_product || item.trainset !== row.trainset) {
+                                    return false;
+                                  }
+
+                                  if (!shouldMatchProcessName) {
+                                    return true;
+                                  }
+
+                                  const normalizedItemProcess = (item.process_name || '').trim().toLowerCase();
+                                  if (!normalizedRowProcess || !normalizedItemProcess) {
+                                    return false;
+                                  }
+
+                                  return matchesProcessNameFlexible(normalizedRowProcess, normalizedItemProcess);
+                                });
                                 const dayInMs = 1000 * 60 * 60 * 24;
                                 const visibleRangeStart = selectedMonthRange ? selectedMonthRange.start : minDate;
                                 const visibleRangeEnd = selectedMonthRange ? selectedMonthRange.end : maxDate;
@@ -1036,7 +1160,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 truncate">Total</p>
-                  <p className="text-xl font-bold text-white">{statistics.total_target_ts || 0} <span className="text-sm font-normal text-gray-400">Item</span></p>
+                  <p className="text-xl font-bold text-white">{statistics.total_target_ts || 0} <span className="text-sm font-normal text-gray-400">{statisticsUnitLabel}</span></p>
                   <p className="text-xs text-gray-500">Bulan ini</p>
                 </div>
               </div>
@@ -1048,7 +1172,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 truncate">To Do</p>
-                  <p className="text-xl font-bold text-yellow-400">{statistics.total_kekurangan || 0} <span className="text-sm font-normal text-yellow-400/60">Item</span></p>
+                  <p className="text-xl font-bold text-yellow-400">{statistics.total_kekurangan || 0} <span className="text-sm font-normal text-yellow-400/60">{statisticsUnitLabel}</span></p>
                   <p className="text-xs text-yellow-400/70">{Number(statistics.persen_kekurangan || 0).toFixed(0)}%</p>
                 </div>
               </div>
@@ -1060,7 +1184,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 truncate">Assembling</p>
-                  <p className="text-xl font-bold text-cyan-400">{statistics.total_on_progress || 0} <span className="text-sm font-normal text-cyan-400/60">Item</span></p>
+                  <p className="text-xl font-bold text-cyan-400">{statistics.total_on_progress || 0} <span className="text-sm font-normal text-cyan-400/60">{statisticsUnitLabel}</span></p>
                   <p className="text-xs text-cyan-400/70">{Number(statistics.persen_on_progress || 0).toFixed(0)}%</p>
                 </div>
               </div>
@@ -1072,7 +1196,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 truncate">Tunggu QC</p>
-                  <p className="text-xl font-bold text-blue-400">{statistics.total_tunggu_qc || 0} <span className="text-sm font-normal text-blue-400/60">Item</span></p>
+                  <p className="text-xl font-bold text-blue-400">{statistics.total_tunggu_qc || 0} <span className="text-sm font-normal text-blue-400/60">{statisticsUnitLabel}</span></p>
                   <p className="text-xs text-blue-400/70">{Number(statistics.persen_tunggu_qc || 0).toFixed(0)}%</p>
                 </div>
               </div>
@@ -1084,7 +1208,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 truncate">Finish Good</p>
-                  <p className="text-xl font-bold text-emerald-400">{statistics.total_finish_good || 0} <span className="text-sm font-normal text-emerald-400/60">Item</span></p>
+                  <p className="text-xl font-bold text-emerald-400">{statistics.total_finish_good || 0} <span className="text-sm font-normal text-emerald-400/60">{statisticsUnitLabel}</span></p>
                   <p className="text-xs text-emerald-400/70">{Number(statistics.persen_finish_good || 0).toFixed(0)}%</p>
                 </div>
               </div>
@@ -1096,7 +1220,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 truncate">Tepat Waktu</p>
-                  <p className="text-xl font-bold text-emerald-400">{statistics.total_tepat_waktu || 0} <span className="text-sm font-normal text-emerald-400/60">Item</span></p>
+                  <p className="text-xl font-bold text-emerald-400">{statistics.total_tepat_waktu || 0} <span className="text-sm font-normal text-emerald-400/60">{statisticsUnitLabel}</span></p>
                   <p className="text-xs text-emerald-400/70">{Number(statistics.persen_tepat_waktu || 0).toFixed(0)}%</p>
                 </div>
               </div>
@@ -1108,7 +1232,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 truncate">Terlambat</p>
-                                  <p className="text-xl font-bold text-yellow-400">{statistics.total_terlambat || 0} <span className="text-sm font-normal text-yellow-400/60">Item</span></p>
+                                  <p className="text-xl font-bold text-yellow-400">{statistics.total_terlambat || 0} <span className="text-sm font-normal text-yellow-400/60">{statisticsUnitLabel}</span></p>
                                   <p className="text-xs text-yellow-400/70">{Number(statistics.persen_terlambat || 0).toFixed(0)}%</p>
                 </div>
               </div>
@@ -1120,7 +1244,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 truncate">Kurang Komponen</p>
-                                  <p className="text-xl font-bold text-red-400">{statistics.total_kurang_komponen || 0} <span className="text-sm font-normal text-red-400/60">Item</span></p>
+                                  <p className="text-xl font-bold text-red-400">{statistics.total_kurang_komponen || 0} <span className="text-sm font-normal text-red-400/60">{statisticsUnitLabel}</span></p>
                                   <p className="text-xs text-red-400/70">{Number(statistics.persen_kurang_komponen || 0).toFixed(0)}%</p>
                 </div>
               </div>
@@ -1260,7 +1384,7 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
           <input type="text" placeholder="Cari ID Product atau Product Name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all" />
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={toggleCreateForm} className="flex items-center gap-2 bg-emerald-500/20 text-emerald-300 px-4 py-2.5 rounded-lg border border-emerald-500/40 hover:bg-emerald-500/30 transition-all">
+          <button onClick={toggleCreateForm} disabled={!canManageSchedule} className="flex items-center gap-2 bg-emerald-500/20 text-emerald-300 px-4 py-2.5 rounded-lg border border-emerald-500/40 hover:bg-emerald-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-500/20">
             <Plus className="w-4 h-4" />
             Tambah Data
           </button>
@@ -1318,10 +1442,10 @@ export default function JadwalClient({ initialRows, selectedLine = "Lantai 3" }:
                       <td className="p-4 text-center text-white">{row.jumlah_kekurangan ?? "—"}</td>
                       <td className="p-4">
                         <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => startEdit(row)} className="p-2 hover:bg-amber-500/20 rounded-lg text-amber-400 hover:text-amber-300 transition-all" title="Edit">
+                          <button onClick={() => startEdit(row)} disabled={!canManageSchedule} className="p-2 hover:bg-amber-500/20 rounded-lg text-amber-400 hover:text-amber-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Edit">
                             <Pencil className="w-4 h-4" />
                           </button>
-                          <button onClick={() => handleDelete(row)} className="p-2 hover:bg-rose-500/20 rounded-lg text-rose-400 hover:text-rose-300 transition-all" title="Delete">
+                          <button onClick={() => handleDelete(row)} disabled={!canManageSchedule} className="p-2 hover:bg-rose-500/20 rounded-lg text-rose-400 hover:text-rose-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Delete">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>

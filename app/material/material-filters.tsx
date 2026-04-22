@@ -10,6 +10,7 @@ interface MaterialFiltersProps {
   nama: string;
   noKpm: string;
   noKpmOptions: string[];
+  canManageMaterialDelivery: boolean;
 }
 
 const PIC_OPTIONS = ['Aang', 'Egi', 'Eko', 'Resti', 'Ruli', 'Taufiq', 'Vany'];
@@ -22,6 +23,7 @@ export default function MaterialFilters({
   nama,
   noKpm,
   noKpmOptions,
+  canManageMaterialDelivery,
 }: MaterialFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -68,6 +70,7 @@ export default function MaterialFilters({
           name="quantity"
           value={String(quantity)}
           onChange={(e) => updateParam('quantity', e.target.value)}
+          disabled={!canManageMaterialDelivery}
           className="w-full rounded-lg bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-white"
         >
           {Array.from({ length: 9 }, (_, idx) => idx + 1).map((qty) => (
@@ -87,6 +90,7 @@ export default function MaterialFilters({
           name="trainset"
           value={trainset}
           onChange={(e) => updateParam('trainset', e.target.value)}
+          disabled={!canManageMaterialDelivery}
           className="w-full rounded-lg bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-white"
         >
           <option value="">Pilih Trainset</option>
@@ -107,6 +111,7 @@ export default function MaterialFilters({
           name="no_kpm"
           value={noKpm}
           onChange={(e) => updateParam('no_kpm', e.target.value)}
+          disabled={!canManageMaterialDelivery}
           className="w-full rounded-lg bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-white"
         >
           <option value="">Pilih No. KPM</option>
@@ -127,6 +132,7 @@ export default function MaterialFilters({
           name="nama"
           value={nama}
           onChange={(e) => updateParam('nama', e.target.value)}
+          disabled={!canManageMaterialDelivery}
           className="w-full rounded-lg bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-white"
         >
           <option value="">Pilih PIC</option>

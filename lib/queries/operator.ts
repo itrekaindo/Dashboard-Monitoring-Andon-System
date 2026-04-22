@@ -123,6 +123,7 @@ LEFT JOIN (
     FROM production_progress pp
     JOIN jadwal j    
         ON pp.id_product = j.id_product 
+        AND pp.trainset = j.trainset
     WHERE      
         pp.status = 'Tunggu QC'     
         AND pp.start_actual >= DATE_ADD(j.tanggal_selesai, INTERVAL 1 DAY)
@@ -293,6 +294,7 @@ LEFT JOIN (
     FROM production_progress pp
     JOIN jadwal j 
         ON pp.id_product = j.id_product
+        AND pp.trainset = j.trainset
     WHERE 
         pp.status = 'Tunggu QC'
         AND j.tanggal_selesai IS NOT NULL

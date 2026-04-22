@@ -48,6 +48,11 @@ interface ModernSidebarProps {
   children?: ReactNode;
 }
 
+interface SidebarUserProfile {
+  name: string;
+  department: string;
+}
+
 const MenuItemComponent = ({ 
   item, 
   isOpen, 
@@ -136,6 +141,39 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [userProfile, setUserProfile] = useState<SidebarUserProfile>({
+    name: 'Admin User',
+    department: '-',
+  });
+
+  const userInitials = userProfile.name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'AU';
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch('/api/auth/me', {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const user = data?.user;
+
+      if (user?.name) {
+        setUserProfile({
+          name: String(user.name),
+          department: String(user.department || '-'),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch current user:', error);
+    }
+  };
 
   // Fetch notifications
   const fetchNotifications = async () => {
@@ -162,6 +200,7 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
 
   // Auto-fetch notifications setiap 1 menit
   useEffect(() => {
+    fetchCurrentUser();
     fetchNotifications(); // Fetch saat component mount
     
     const interval = setInterval(() => {
@@ -196,7 +235,9 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
   const getActiveMenu = () => {
     if (pathname === '/') return 'dashboard';
     if (pathname.startsWith('/andon-monitoring')) return 'andon-monitoring';
-    if (pathname.startsWith('/material')) return 'material';
+    if (pathname.startsWith('/material/monitoring-kpm')) return 'material-monitoring-kpm';
+    if (pathname.startsWith('/material/material-tracking')) return 'material-tracking';
+    if (pathname.startsWith('/material')) return 'material-cetak-kpm-lantai3';
     if (pathname === '/operator' || pathname.startsWith('/operator/')) return 'operator-profile';
     if (pathname.startsWith('/penugasan-operator')) return 'operator-assignment';
     if (pathname.startsWith('/schedule/lantai-1')) return 'schedule-lantai1';
@@ -242,7 +283,25 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
       id: 'material',
       label: 'Material',
       icon: Database,
-      path: '/material'
+      submenu: [
+        {
+          id: 'material-cetak-kpm-lantai3',
+          label: 'Cetak KPM Lantai 3',
+          path: '/material'
+        },
+        {
+          id: 'material-monitoring-kpm',
+          label: 'Monitoring KPM',
+          path: '/material/monitoring-kpm'
+        },
+        /*
+        {
+          id: 'material-tracking',
+          label: 'Material Tracking',
+          path: '/material/material-tracking'
+        }
+          */
+      ]
     },
     {
       id: 'operator',
@@ -395,11 +454,11 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
             <div className="space-y-2">
               <div className="flex items-center gap-3 p-3 bg-gray-800/50 rounded-lg">
                 <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-semibold">
-                  AD
+                  {userInitials}
                 </div>
                 <div className="flex-1">
-                  <p className="text-white text-sm font-medium">Admin User</p>
-                  <p className="text-gray-400 text-xs">admin@company.com</p>
+                  <p className="text-white text-sm font-medium">{userProfile.name}</p>
+                  <p className="text-gray-400 text-xs">{userProfile.department}</p>
                 </div>
               </div>
               <div className="flex gap-2">

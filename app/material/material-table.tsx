@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { pdfjs } from 'react-pdf';
 import { useReactToPrint } from 'react-to-print';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 import type { Material } from '@/lib/queries/master_material';
@@ -22,7 +21,7 @@ type SubmittedRow = {
   deskripsi: string | null;
   spesifikasi: string | null;
   qty_diminta: number;
-  qty_diserahkan: number;
+  qty_diserahkan: number | null;
   satuan: string | null;
   keterangan: string | null;
 };
@@ -44,6 +43,7 @@ interface MaterialTableProps {
   noKpm: string;
   pic: string;
   selectedProduct: string;
+  canManageMaterialDelivery: boolean;
 }
 
 function toNumeric(value: string | null | undefined) {
@@ -57,8 +57,8 @@ function toNumeric(value: string | null | undefined) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function formatQty(value: number | null) {
-  if (value === null) return '-';
+function formatQty(value: number | null | undefined) {
+  if (value === null || value === undefined) return '-';
   return value.toLocaleString('id-ID');
 }
 
@@ -92,6 +92,7 @@ export default function MaterialTable({
   noKpm,
   pic,
   selectedProduct,
+  canManageMaterialDelivery,
 }: MaterialTableProps) {
   const rows = useMemo(
     () =>
@@ -107,14 +108,6 @@ export default function MaterialTable({
     [materials, quantity]
   );
 
-  const createDefaultJumlahDiserahkanMap = () => {
-    const initial: Record<number, string> = {};
-    rows.forEach((row, index) => {
-      initial[index] = row.totalDiminta === null ? '' : String(row.totalDiminta);
-    });
-    return initial;
-  };
-
   const createDefaultKeteranganMap = () => {
     const initial: Record<number, string> = {};
     rows.forEach((_, index) => {
@@ -123,17 +116,25 @@ export default function MaterialTable({
     return initial;
   };
 
-  const [jumlahDiserahkanMap, setJumlahDiserahkanMap] = useState<Record<number, string>>(() =>
-    createDefaultJumlahDiserahkanMap()
-  );
+  const createDefaultSelectedMap = () => {
+    const initial: Record<number, boolean> = {};
+    rows.forEach((_, index) => {
+      initial[index] = true;
+    });
+    return initial;
+  };
 
   const [keteranganMap, setKeteranganMap] = useState<Record<number, string>>(() =>
     createDefaultKeteranganMap()
   );
 
+  const [selectedRowsMap, setSelectedRowsMap] = useState<Record<number, boolean>>(() =>
+    createDefaultSelectedMap()
+  );
+
   useEffect(() => {
-    setJumlahDiserahkanMap(createDefaultJumlahDiserahkanMap());
     setKeteranganMap(createDefaultKeteranganMap());
+    setSelectedRowsMap(createDefaultSelectedMap());
   }, [rows]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -163,9 +164,6 @@ export default function MaterialTable({
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  useEffect(() => {
-    pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-  }, []);
 
   useEffect(() => {
     if (!printRequested || !printPayload) return;
@@ -178,6 +176,11 @@ export default function MaterialTable({
   };
 
   const submitRows = async () => {
+    if (!canManageMaterialDelivery) {
+      showToast('Hanya user role PENGENDALIAN yang boleh mengirim material.', 'warning');
+      return;
+    }
+
     if (!noKpm) {
       showToast('No. KPM wajib dipilih sebelum kirim.', 'warning');
       return;
@@ -198,7 +201,11 @@ export default function MaterialTable({
       return;
     }
 
-    const payloadRows: SubmittedRow[] = rows.map((row, index) => ({
+    const selectedRows = rows
+      .map((row, index) => ({ row, index }))
+      .filter(({ index }) => selectedRowsMap[index] ?? true);
+
+    const payloadRows: SubmittedRow[] = selectedRows.map(({ row, index }) => ({
       id_produk: row.material.id_produk ?? null,
       produk: row.material.produk ?? null,
       trainset,
@@ -207,10 +214,15 @@ export default function MaterialTable({
       deskripsi: row.material.deskripsi ?? null,
       spesifikasi: row.material.spesifikasi ?? null,
       qty_diminta: row.totalDiminta ?? 0,
-      qty_diserahkan: Number(jumlahDiserahkanMap[index] ?? 0) || 0,
+      qty_diserahkan: null,
       satuan: row.material.satuan ?? null,
       keterangan: (keteranganMap[index] ?? '').trim() || null,
     }));
+
+    if (payloadRows.length === 0) {
+      showToast('Pilih minimal satu material sebelum kirim.', 'warning');
+      return;
+    }
 
     const requestFingerprint = JSON.stringify({
       no_kpm: noKpm,
@@ -250,6 +262,8 @@ export default function MaterialTable({
         error?: string;
         inserted?: number;
         duplicate?: boolean;
+        node_red_sent?: boolean;
+        node_red_error?: string;
       };
       if (!response.ok) {
         throw new Error(data.error || 'Gagal mengirim data.');
@@ -271,9 +285,15 @@ export default function MaterialTable({
         keteranganPerProduct,
       });
       setPrintRequested(true);
-      setJumlahDiserahkanMap(createDefaultJumlahDiserahkanMap());
       setKeteranganMap(createDefaultKeteranganMap());
-      showToast(`Berhasil mengirim ${data.inserted ?? 0} baris. Dokumen siap dicetak.`, 'success');
+      if (data.node_red_sent) {
+        showToast(`Berhasil mengirim ${data.inserted ?? 0} baris ke database dan Node-RED. Dokumen siap dicetak.`, 'success');
+      } else {
+        showToast(
+          `Berhasil mengirim ${data.inserted ?? 0} baris ke database, tetapi Node-RED gagal: ${data.node_red_error || 'cek koneksi endpoint.'}`,
+          'warning'
+        );
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Terjadi kesalahan saat kirim data.', 'error');
     } finally {
@@ -282,7 +302,8 @@ export default function MaterialTable({
   };
 
   const isSubmitDisabled =
-    isSubmitting || rows.length === 0 || !noKpm || !pic || !selectedProduct;
+    !canManageMaterialDelivery || isSubmitting || rows.length === 0 || !noKpm || !pic || !selectedProduct ||
+    !rows.some((_, index) => selectedRowsMap[index] ?? true);
 
   return (
     <div>
@@ -293,13 +314,33 @@ export default function MaterialTable({
         <table className="w-full text-sm">
         <thead>
           <tr className="bg-gray-900/70 border-b border-gray-700">
+            <th className="p-3 text-center text-gray-300 font-semibold w-10">
+              <input
+                type="checkbox"
+                checked={rows.length > 0 && rows.every((_, index) => selectedRowsMap[index] ?? false)}
+                disabled={!canManageMaterialDelivery}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setSelectedRowsMap(() => {
+                    const next: Record<number, boolean> = {};
+                    rows.forEach((_, index) => {
+                      next[index] = checked;
+                    });
+                    return next;
+                  });
+                }}
+                aria-label="Pilih semua material"
+                className="mx-auto h-4 w-4 rounded border-gray-600 bg-gray-900 text-emerald-500"
+              />
+            </th>
             <th className="text-left p-3 text-gray-300 font-semibold">No</th>
             <th className="text-left p-3 text-gray-300 font-semibold">Produk</th>
             <th className="text-left p-3 text-gray-300 font-semibold">Komat</th>
             <th className="text-left p-3 text-gray-300 font-semibold">Deskripsi</th>
             <th className="text-left p-3 text-gray-300 font-semibold">Spesifikasi</th>
             <th className="text-left p-3 text-gray-300 font-semibold">Total Diminta</th>
-            <th className="text-left p-3 text-gray-300 font-semibold">Jumlah Diserahkan</th>
+            <th className="text-left p-3 text-gray-300 font-semibold">Stok PPC</th>
+            <th className="text-left p-3 text-gray-300 font-semibold">Stok Warehouse</th>
             <th className="text-left p-3 text-gray-300 font-semibold">Keterangan</th>
           </tr>
         </thead>
@@ -313,6 +354,19 @@ export default function MaterialTable({
                   key={`${material.no ?? 'no'}-${material.komat ?? 'komat'}-${index}`}
                   className="border-b border-gray-800 hover:bg-gray-800/40"
                 >
+                  <td className="p-3 align-middle text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedRowsMap[index] ?? true}
+                      disabled={!canManageMaterialDelivery}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setSelectedRowsMap((prev) => ({ ...prev, [index]: checked }));
+                      }}
+                      aria-label={`Pilih material ${material.komat ?? material.no ?? index + 1}`}
+                      className="mx-auto h-4 w-4 rounded border-gray-600 bg-gray-900 text-emerald-500"
+                    />
+                  </td>
                   <td className="p-3 text-gray-200">{material.no ?? '-'}</td>
                   <td className="p-3 text-white">{material.produk ?? '-'}</td>
                   <td className="p-3 text-gray-300">{material.komat ?? '-'}</td>
@@ -322,44 +376,18 @@ export default function MaterialTable({
                     {formatQty(totalDiminta)}
                     <span className="text-gray-400 font-normal ml-1">{material.satuan ?? '-'}</span>
                   </td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-2 whitespace-nowrap">
-                      <input
-                        type="number"
-                        min={0}
-                        step="1"
-                        name={`jumlah_diserahkan_${index}`}
-                        value={jumlahDiserahkanMap[index] ?? ''}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setJumlahDiserahkanMap((prev) => ({ ...prev, [index]: value }));
-
-                          if (value.trim() === '') {
-                            setKeteranganMap((prev) => ({ ...prev, [index]: '' }));
-                            return;
-                          }
-
-                          const inputNumber = Number(value);
-                          if (Number.isFinite(inputNumber) && totalDiminta !== null) {
-                            if (inputNumber < totalDiminta) {
-                              setKeteranganMap((prev) => ({ ...prev, [index]: 'Komponen Kurang' }));
-                            } else {
-                              setKeteranganMap((prev) => ({ ...prev, [index]: '' }));
-                            }
-                          } else {
-                            setKeteranganMap((prev) => ({ ...prev, [index]: '' }));
-                          }
-                        }}
-                        className="w-15 rounded-md bg-gray-900 border border-gray-700 px-2 py-1 text-sm text-white"
-                      />
-                      <span className="text-gray-400 text-sm">{material.satuan ?? '-'}</span>
-                    </div>
+                  <td className="p-3 text-gray-200 whitespace-nowrap">
+                    {formatQty(material.stok_ppc)}
+                  </td>
+                  <td className="p-3 text-gray-200 whitespace-nowrap">
+                    {formatQty(material.stok_warehouse)}
                   </td>
                   <td className="p-3">
                     <input
                       type="text"
                       name={`keterangan_${index}`}
                       value={keteranganMap[index] ?? ''}
+                      disabled={!canManageMaterialDelivery}
                       onChange={(e) => {
                         const value = e.target.value;
                         setKeteranganMap((prev) => ({ ...prev, [index]: value }));
@@ -373,7 +401,7 @@ export default function MaterialTable({
             })
           ) : (
             <tr>
-              <td colSpan={8} className="p-8 text-center text-gray-400">
+              <td colSpan={10} className="p-8 text-center text-gray-400">
                 Data material tidak ditemukan.
               </td>
             </tr>
@@ -383,7 +411,9 @@ export default function MaterialTable({
       </div>
       <div className="px-4 py-4 border-t border-gray-700 bg-gray-900/30 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-gray-400">
-          Wajib pilih Produk, No. KPM, dan PIC sebelum kirim.
+          {canManageMaterialDelivery
+            ? 'Wajib pilih Produk, No. KPM, PIC, dan minimal satu material sebelum kirim.'
+            : 'Mode lihat saja: hanya user role PENGENDALIAN yang dapat mengubah data dan kirim material.'}
         </p>
         <button
           type="button"
@@ -391,7 +421,7 @@ export default function MaterialTable({
           disabled={isSubmitDisabled}
           className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
         >
-          {isSubmitting ? 'Mengirim...' : 'Kirim'}
+          {isSubmitting ? 'Mengirim...' : 'Kirim & Cetak KPM'}
         </button>
       </div>
       {toast ? (
@@ -483,7 +513,11 @@ export default function MaterialTable({
                   <td className="border border-black px-1 py-1">{row.deskripsi ?? ''}</td>
                   <td className="border border-black px-1 py-1">{row.spesifikasi ?? ''}</td>
                   <td className="border border-black px-1 py-1 text-right">{formatQty(row.qty_diminta)}</td>
-                  <td className="border border-black px-1 py-1 text-right">{formatQty(row.qty_diserahkan)}</td>
+                  <td className="border border-black px-1 py-1 text-right">
+                    {row.qty_diserahkan === null || row.qty_diserahkan === undefined
+                      ? ''
+                      : formatQty(row.qty_diserahkan)}
+                  </td>
                   <td className="border border-black px-1 py-1"></td>
                   <td className="border border-black px-1 py-1 text-center">{row.satuan ?? ''}</td>
                   {index === 0 ? (
