@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ModernSidebar from "@/components/ui/sidebar";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, Package, Clock, CheckCircle, AlertCircle, TrendingUp } from "lucide-react";
+import { Search, Package, Clock, CheckCircle, AlertCircle, TrendingUp, ChevronDown, ChevronUp, ShoppingCart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -39,7 +39,38 @@ interface StatusHistoryEvent {
   workstation?: number;
   note_qc?: string;
   percentage?: number;
+  timeline_message?: string;
   source_table?: string;
+  no_kpm?: string;
+  material_pic?: string;
+  material_details?: Array<{
+    post_date?: Date | string;
+    no_kpm?: string;
+    item?: number;
+    komat?: string;
+    spesifikasi?: string;
+    qty?: number;
+    qty_ready?: number;
+    pic?: string;
+  }>;
+}
+
+interface MaterialTimelineEvent {
+  type: 'reserved' | 'ready' | 'shipped';
+  date: string | null;
+  status: string;
+  message: string;
+  line: string;
+  no_kpm: string | null;
+  pic: string | null;
+  pic_reservasi: string | null;
+  no_reservasi: string | null;
+  qty_ready: number | null;
+}
+
+interface HistoryLookupEvent {
+  source_table?: string;
+  no_kpm?: string;
 }
 
 function ProductTrackingContent() {
@@ -62,6 +93,9 @@ function ProductTrackingContent() {
   const [isLoadingTrainsets, setIsLoadingTrainsets] = useState(false);
   const [statusHistories, setStatusHistories] = useState<{ [key: string]: StatusHistoryEvent[] }>({});
   const [autoTracked, setAutoTracked] = useState(false);
+  const [expandedMaterialRows, setExpandedMaterialRows] = useState<{ [key: string]: boolean }>({});
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [stokMaterialTimelines, setStokMaterialTimelines] = useState<{ [key: string]: MaterialTimelineEvent[] }>({});
 
   // Fetch products on mount
   useEffect(() => {
@@ -83,6 +117,23 @@ function ProductTrackingContent() {
     fetchProducts();
   }, []);
 
+  // Fetch current user role
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (response.ok) {
+          const data = await response.json();
+          setUserRole(data.user?.role || null);
+        }
+      } catch (err) {
+        console.error('Error fetching user role:', err);
+      }
+    };
+
+    fetchUserRole();
+  }, []);
+
   // Fetch status history for a product
   const fetchStatusHistory = async (id_perproduct: string) => {
     try {
@@ -95,11 +146,38 @@ function ProductTrackingContent() {
           ...prev,
           [id_perproduct]: data.history || []
         }));
+        return data.history || [];
       }
     } catch (err) {
       console.error('Error fetching status history:', err);
     }
+
+    return [];
   };
+
+  // Fetch stok material timeline
+  const fetchStokMaterialTimeline = async (id_perproduct: string, no_kpm: string) => {
+    try {
+      if (!no_kpm) {
+        console.warn('Cannot determine no_kpm for stok material timeline:', id_perproduct);
+        return;
+      }
+
+      const response = await fetch(
+        `/api/product-tracking/stok-material-timeline?no_kpm=${encodeURIComponent(no_kpm)}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setStokMaterialTimelines(prev => ({
+          ...prev,
+          [id_perproduct]: data.timeline || []
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching stok material timeline:', err);
+    }
+  };
+
 
   // Handle tracking
   const handleTrack = useCallback(async (overrideId?: string) => {
@@ -141,11 +219,18 @@ function ProductTrackingContent() {
       const data = await response.json();
       setResults(data.results || []);
       
-      // Fetch status history for each result
+      // Fetch status history and stok material timeline for each result
       if (data.results && data.results.length > 0) {
-        data.results.forEach((result: TrackingResult) => {
-          fetchStatusHistory(result.id_perproduct);
-        });
+        for (const result of data.results as TrackingResult[]) {
+          const history = await fetchStatusHistory(result.id_perproduct);
+          const historyRows = history as HistoryLookupEvent[];
+          const materialEvent = historyRows.find((event) => event.source_table === 'material_received' && event.no_kpm);
+          const noKpm = materialEvent?.no_kpm || historyRows.find((event) => event.no_kpm)?.no_kpm;
+
+          if (noKpm) {
+            await fetchStokMaterialTimeline(result.id_perproduct, noKpm);
+          }
+        }
       }
       
       if (data.results.length === 0) {
@@ -294,9 +379,24 @@ function ProductTrackingContent() {
 
   // Get status message based on status and source table
   const getStatusMessage = (event: StatusHistoryEvent): string => {
+    if (event.timeline_message) {
+      return event.timeline_message;
+    }
+
     const status = event.status || '';
     const operatorName = event.operator_actual_name || 'Operator';
     const noteQc = event.note_qc;
+
+    if (event.source_table === 'material_received') {
+      const noKpmText = event.no_kpm ? ` (No KPM: ${event.no_kpm})` : '';
+      return `Material diterima oleh ${operatorName}${noKpmText}`;
+    }
+
+    if (event.source_table === 'material_shipped') {
+      const materialSenderName = 'Aris';
+      const noKpmText = event.no_kpm ? ` (No KPM: ${event.no_kpm})` : '';
+      return `Material dikirim oleh ${materialSenderName}${noKpmText}`;
+    }
 
     if (event.source_table === 'production_progress_protrack') {
       const lowerStatus = status.toLowerCase();
@@ -335,15 +435,61 @@ function ProductTrackingContent() {
     return statusMap[status] || `${operatorName} - ${status}`;
   };
 
+  const toggleMaterialRows = (key: string) => {
+    setExpandedMaterialRows((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
   const getStatusColor = (status?: string) => {
     if (!status) return { bg: 'bg-gray-600', text: 'text-white' };
     const lower = status.toLowerCase();
     if (lower.includes('finish good')) return { bg: 'bg-emerald-600', text: 'text-white' };
+    if (lower.includes('material diterima')) return { bg: 'bg-blue-600', text: 'text-white' };
     if (lower.includes('tunggu qc')) return { bg: 'bg-blue-600', text: 'text-white' };
+    if (lower.includes('on progress') || lower.includes('material dikirim')) return { bg: 'bg-yellow-700', text: 'text-white' };
     if (lower.includes('terlambat')) return { bg: 'bg-red-600', text: 'text-white' };
     if (lower.includes('tunggu')) return { bg: 'bg-amber-600', text: 'text-white' };
     if (lower.includes('masuk')) return { bg: 'bg-emerald-500', text: 'text-white' };
     return { bg: 'bg-gray-600', text: 'text-white' };
+  };
+
+  const getMergedHistoryEvents = (idPerproduct: string): StatusHistoryEvent[] => {
+    const baseEvents = statusHistories[idPerproduct] || [];
+    const materialEvents = userRole !== 'GUEST' ? (stokMaterialTimelines[idPerproduct] || []) : [];
+    const shippedDetailEvent = baseEvents.find(
+      (event) => event.source_table === 'material_shipped' && Array.isArray(event.material_details) && event.material_details.length > 0
+    );
+    const reservedMaterialDetails = shippedDetailEvent?.material_details;
+
+    const stockHistoryEvents: StatusHistoryEvent[] = materialEvents
+      .filter((event) => Boolean(event.date))
+      .map((event) => ({
+        status: event.status,
+        operator_actual_name: event.type === 'ready' ? (event.pic_reservasi || 'Operator') : (event.pic || 'Operator'),
+        start_actual: event.date as string,
+        finish_actual: undefined,
+        process_name: 'Material',
+        line: event.line,
+        workstation: undefined,
+        note_qc: undefined,
+        percentage: undefined,
+        timeline_message: event.message,
+        source_table: `material_stock_${event.type}`,
+        no_kpm: event.no_kpm || undefined,
+        material_details: event.type === 'reserved' ? reservedMaterialDetails : undefined,
+      }));
+
+    const filteredBaseEvents = stockHistoryEvents.length > 0
+      ? baseEvents.filter((event) => event.source_table !== 'material_shipped')
+      : baseEvents;
+
+    return [...filteredBaseEvents, ...stockHistoryEvents].sort((a, b) => {
+      const aTime = a.start_actual ? new Date(a.start_actual).getTime() : 0;
+      const bTime = b.start_actual ? new Date(b.start_actual).getTime() : 0;
+      return bTime - aTime;
+    });
   };
 
   // Get process stage based on status
@@ -628,6 +774,7 @@ function ProductTrackingContent() {
             <div className="grid gap-4">
               {results.map((result, idx) => {
                 const statusColor = getStatusColor(result.status);
+                const mergedHistoryEvents = getMergedHistoryEvents(result.id_perproduct);
                 
                 return (
                   <Card key={idx} className="bg-gray-800/50 border border-gray-700/60 hover:border-blue-500/50 transition-all">
@@ -783,7 +930,7 @@ function ProductTrackingContent() {
                         </div>
 
                         {/* Status History Timeline */}
-                        {statusHistories[result.id_perproduct] && statusHistories[result.id_perproduct].length > 0 && (
+                        {mergedHistoryEvents.length > 0 && (
                           <div className="pt-6 border-t border-gray-700">
                             <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
                               <Clock className="w-5 h-5 text-blue-400" />
@@ -791,12 +938,18 @@ function ProductTrackingContent() {
                             </h4>
                             
                             <div className="space-y-3">
-                              {statusHistories[result.id_perproduct].map((event, eventIdx) => {
+                              {mergedHistoryEvents.map((event, eventIdx) => {
                                 const eventStatusColor = getStatusColor(event.status);
+                                const materialToggleKey = `${result.id_perproduct}-${eventIdx}-${event.no_kpm || 'nokpm'}`;
+                                const isMaterialExpanded = Boolean(expandedMaterialRows[materialToggleKey]);
+                                const hasMaterialDetails =
+                                  (event.source_table === 'material_shipped' || event.source_table === 'material_stock_reserved') &&
+                                  Array.isArray(event.material_details) &&
+                                  event.material_details.length > 0;
                                 
                                 return (
                                   <div 
-                                    key={eventIdx} 
+                                    key={`${result.id_perproduct}-${eventIdx}-${event.source_table || 'event'}-${String(event.start_actual)}`} 
                                     className="flex items-start gap-4 p-3 bg-gray-900/40 rounded-lg border border-gray-700/50 hover:border-gray-600/50 transition-all"
                                   >
                                     {/* Date Column */}
@@ -815,7 +968,7 @@ function ProductTrackingContent() {
                                     {/* Timeline Dot */}
                                     <div className="flex flex-col items-center pt-1">
                                       <div className={`w-3 h-3 rounded-full ${eventStatusColor.bg}`}></div>
-                                      {eventIdx < statusHistories[result.id_perproduct].length - 1 && (
+                                      {eventIdx < mergedHistoryEvents.length - 1 && (
                                         <div className="w-0.5 h-10 bg-gray-700 mt-1"></div>
                                       )}
                                     </div>
@@ -831,6 +984,51 @@ function ProductTrackingContent() {
                                       <p className="text-sm text-gray-300">
                                          {getStatusMessage(event)}
                                       </p>
+
+                                      {hasMaterialDetails && userRole !== 'GUEST' && (
+                                        <div className="pt-2 space-y-3">
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleMaterialRows(materialToggleKey)}
+                                            className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 transition-colors"
+                                          >
+                                            <ShoppingCart className="w-3.5 h-3.5" />
+                                            Detail material
+                                            {isMaterialExpanded ? (
+                                              <ChevronUp className="w-3.5 h-3.5" />
+                                            ) : (
+                                              <ChevronDown className="w-3.5 h-3.5" />
+                                            )}
+                                          </button>
+
+                                          {isMaterialExpanded && (
+                                            <div className="overflow-x-auto rounded-lg border border-gray-700/70">
+                                              <table className="min-w-full text-xs">
+                                                <thead className="bg-gray-900/80 text-gray-300">
+                                                  <tr>
+                                                    <th className="px-3 py-2 text-left font-semibold">No.</th>
+                                                    <th className="px-3 py-2 text-left font-semibold">Komat</th>
+                                                    <th className="px-3 py-2 text-left font-semibold">Spesifikasi</th>
+                                                    <th className="px-3 py-2 text-left font-semibold">Qty Diminta</th>
+                                                    <th className="px-3 py-2 text-left font-semibold">Qty Diserahkan</th>
+                                                  </tr>
+                                                </thead>
+                                                <tbody>
+                                                  {event.material_details?.map((material, materialIdx) => (
+                                                    <tr key={`${material.no_kpm || 'kpm'}-${material.item || 0}-${materialIdx}`} className="border-t border-gray-800 bg-gray-900/40 text-gray-200">
+                                                      <td className="px-3 py-2 whitespace-nowrap">{material.item ?? '-'}</td>
+                                                      <td className="px-3 py-2 whitespace-nowrap">{material.komat || '-'}</td>
+                                                      <td className="px-3 py-2">{material.spesifikasi || '-'}</td>
+                                                      <td className="px-3 py-2 whitespace-nowrap">{material.qty ?? '-'}</td>
+                                                      <td className="px-3 py-2 whitespace-nowrap">{material.qty_ready ?? '-'}</td>
+                                                    </tr>
+                                                  ))}
+                                                </tbody>
+                                              </table>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 );

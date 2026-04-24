@@ -255,3 +255,43 @@ export async function getMonitoringKpmFilterOptions(): Promise<MonitoringKpmFilt
     };
   }
 }
+
+export interface StokMaterialTimeline {
+  no_kpm: string | null;
+  post_date: string | null;
+  tgl_ready: string | null;
+  out_date: string | null;
+  pic: string | null;
+  pic_reservasi: string | null;
+  no_reservasi: string | null;
+  qty_ready: number | null;
+  status_komponen: string | null;
+}
+
+export async function getStokMaterialTimeline(
+  no_kpm: string,
+): Promise<StokMaterialTimeline[]> {
+  try {
+    const result = await db.execute(sql`
+      SELECT 
+        no_kpm,
+        MAX(post_date) AS post_date,
+        MAX(tgl_ready) AS tgl_ready,
+        MAX(out_date) AS out_date,
+        MAX(pic) AS pic,
+        MAX(pic_reservasi) AS pic_reservasi,
+        MAX(no_reservasi) AS no_reservasi,
+        MAX(qty_ready) AS qty_ready,
+        MAX(status_komponen) AS status_komponen
+      FROM stok_material
+      WHERE no_kpm = ${no_kpm}
+      GROUP BY no_kpm
+    `);
+
+    const rows = Array.isArray(result[0]) ? result[0] : result;
+    return rows as StokMaterialTimeline[];
+  } catch (error) {
+    console.error('Gagal mengambil timeline stok material:', error);
+    return [];
+  }
+}

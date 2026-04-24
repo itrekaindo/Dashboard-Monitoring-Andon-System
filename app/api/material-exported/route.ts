@@ -62,14 +62,16 @@ function normalizeRows(rows: unknown): MaterialExportedInsertRow[] {
   if (!Array.isArray(rows)) return [];
 
   return rows
-    .map((row) => {
+    .map((row): MaterialExportedInsertRow | null => {
       const item = row as Partial<MaterialExportedInsertRow>;
       const qtyDiminta = toNullableNumber(item.qty_diminta);
-      const qtyDiserahkan = toNullableNumber(item.qty_diserahkan);
+      const qtyDiserahkanInput = toNullableNumber(item.qty_diserahkan);
 
       if (qtyDiminta === null) {
         return null;
       }
+
+      const qtyDiserahkan = qtyDiserahkanInput ?? qtyDiminta;
 
       return {
         id_produk: toNullableString(item.id_produk),
@@ -85,7 +87,7 @@ function normalizeRows(rows: unknown): MaterialExportedInsertRow[] {
         keterangan: toNullableString(item.keterangan),
       };
     })
-    .filter((row): row is MaterialExportedInsertRow => Boolean(row));
+    .filter((row): row is MaterialExportedInsertRow => row !== null);
 }
 
 function getNodeRedSubmitUrl() {

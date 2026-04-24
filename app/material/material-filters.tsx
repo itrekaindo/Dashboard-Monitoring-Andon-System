@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 interface MaterialFiltersProps {
@@ -28,6 +29,41 @@ export default function MaterialFilters({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const lastActivityRef = useRef<number>(Date.now());
+
+  useEffect(() => {
+    const markActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = [
+      'mousemove',
+      'keydown',
+      'click',
+      'scroll',
+      'touchstart',
+    ];
+
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, markActivity, { passive: true });
+    });
+
+    const IDLE_REFRESH_MS = 2 * 60 * 1000;
+    const checkInterval = window.setInterval(() => {
+      const idleDuration = Date.now() - lastActivityRef.current;
+      if (idleDuration >= IDLE_REFRESH_MS) {
+        router.refresh();
+        lastActivityRef.current = Date.now();
+      }
+    }, 15_000);
+
+    return () => {
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, markActivity);
+      });
+      window.clearInterval(checkInterval);
+    };
+  }, [router]);
 
   const updateParam = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());

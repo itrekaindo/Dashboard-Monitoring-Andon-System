@@ -77,6 +77,7 @@ export async function GET(request: Request) {
       user: {
         id: user.id,
         name: user.name,
+        role: user.role,
         department: user.department || user.role || "-",
       },
     });

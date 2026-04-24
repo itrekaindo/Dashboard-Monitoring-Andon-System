@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useReactToPrint } from 'react-to-print';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 import type { Material } from '@/lib/queries/master_material';
@@ -46,7 +47,7 @@ interface MaterialTableProps {
   canManageMaterialDelivery: boolean;
 }
 
-function toNumeric(value: string | null | undefined) {
+function toNumeric(value: string | number | null | undefined) {
   if (!value) return null;
   const normalized = value
     .toString()
@@ -73,6 +74,22 @@ function formatDateTime(dateISO: string) {
   });
 }
 
+function getAutoKeterangan(totalDiminta: number | null, stokPpc: number | null, stokWarehouse: number | null) {
+  if (totalDiminta === null) return '';
+  if (stokPpc === null && stokWarehouse === null) return '';
+
+  const ppc = stokPpc ?? 0;
+  const gudang = stokWarehouse ?? 0;
+
+  const ppcKurang = totalDiminta > ppc;
+  const gudangKurang = totalDiminta > gudang;
+
+  if (ppcKurang && gudangKurang) return 'Stok Kosong';
+  if (gudangKurang) return 'Stok Gudang Kurang';
+  if (ppcKurang) return 'Stok PPC kurang';
+  return '';
+}
+
 function createHash(input: string) {
   let hash = 0;
   for (let i = 0; i < input.length; i += 1) {
@@ -94,6 +111,10 @@ export default function MaterialTable({
   selectedProduct,
   canManageMaterialDelivery,
 }: MaterialTableProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const rows = useMemo(
     () =>
       materials.map((material) => {
@@ -110,8 +131,12 @@ export default function MaterialTable({
 
   const createDefaultKeteranganMap = () => {
     const initial: Record<number, string> = {};
-    rows.forEach((_, index) => {
-      initial[index] = '';
+    rows.forEach((row, index) => {
+      initial[index] = getAutoKeterangan(
+        row.totalDiminta,
+        toNumeric(row.material.stok_ppc),
+        toNumeric(row.material.stok_warehouse)
+      );
     });
     return initial;
   };
@@ -142,11 +167,22 @@ export default function MaterialTable({
   const [lastSubmittedFingerprint, setLastSubmittedFingerprint] = useState<string>('');
   const [printPayload, setPrintPayload] = useState<PrintPayload | null>(null);
   const [printRequested, setPrintRequested] = useState(false);
+  const [shouldRefreshAfterPrint, setShouldRefreshAfterPrint] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `KPM-${noKpm || 'material'}`,
+    onAfterPrint: () => {
+      if (!shouldRefreshAfterPrint) return;
+
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('no_kpm');
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname);
+      router.refresh();
+      setShouldRefreshAfterPrint(false);
+    },
     pageStyle: `
       @page { size: A4 landscape; margin: 10mm; }
       @media print {
@@ -214,7 +250,7 @@ export default function MaterialTable({
       deskripsi: row.material.deskripsi ?? null,
       spesifikasi: row.material.spesifikasi ?? null,
       qty_diminta: row.totalDiminta ?? 0,
-      qty_diserahkan: null,
+      qty_diserahkan: row.totalDiminta ?? 0,
       satuan: row.material.satuan ?? null,
       keterangan: (keteranganMap[index] ?? '').trim() || null,
     }));
@@ -284,6 +320,7 @@ export default function MaterialTable({
         rows: payloadRows,
         keteranganPerProduct,
       });
+      setShouldRefreshAfterPrint(true);
       setPrintRequested(true);
       setKeteranganMap(createDefaultKeteranganMap());
       if (data.node_red_sent) {
@@ -387,11 +424,8 @@ export default function MaterialTable({
                       type="text"
                       name={`keterangan_${index}`}
                       value={keteranganMap[index] ?? ''}
-                      disabled={!canManageMaterialDelivery}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setKeteranganMap((prev) => ({ ...prev, [index]: value }));
-                      }}
+                      readOnly
+                      disabled
                       placeholder="Isi keterangan"
                       className="w-full min-w-[180px] rounded-md bg-gray-900 border border-gray-700 px-2 py-1 text-sm text-white"
                     />
@@ -499,8 +533,8 @@ export default function MaterialTable({
                 <th className="border border-black px-1 py-1">Jumlah Diserahkan</th>
                 <th className="border border-black px-1 py-1">Diterima Produksi</th>
                 <th className="border border-black px-1 py-1">Satuan</th>
-                <th className="border border-black px-1 py-1">Lot/TS</th>
                 <th className="border border-black px-1 py-1">Keterangan</th>
+                <th className="border border-black px-1 py-1">Lot/TS</th>
                 <th className="border border-black px-1 py-1">Workstation Sebelumnya</th>
                 <th className="border border-black px-1 py-1">Workstation Sesudahnya</th>
               </tr>
@@ -513,13 +547,12 @@ export default function MaterialTable({
                   <td className="border border-black px-1 py-1">{row.deskripsi ?? ''}</td>
                   <td className="border border-black px-1 py-1">{row.spesifikasi ?? ''}</td>
                   <td className="border border-black px-1 py-1 text-right">{formatQty(row.qty_diminta)}</td>
-                  <td className="border border-black px-1 py-1 text-right">
-                    {row.qty_diserahkan === null || row.qty_diserahkan === undefined
-                      ? ''
-                      : formatQty(row.qty_diserahkan)}
-                  </td>
+                  <td className="border border-black px-1 py-1 text-right"></td>
                   <td className="border border-black px-1 py-1"></td>
                   <td className="border border-black px-1 py-1 text-center">{row.satuan ?? ''}</td>
+                  <td className="border border-black px-1 py-1 align-top">
+                    {row.keterangan ?? ''}
+                  </td>
                   {index === 0 ? (
                     <td
                       className="border border-black px-1 py-1"
@@ -527,14 +560,6 @@ export default function MaterialTable({
                       style={{ textAlign: 'center', verticalAlign: 'middle' }}
                     >
                       {printPayload?.trainset ?? ''}
-                    </td>
-                  ) : null}
-                  {index === 0 ? (
-                    <td
-                      className="border border-black px-1 py-1 align-top"
-                      rowSpan={Math.max(arr.length, 1)}
-                    >
-                      {printPayload?.keteranganPerProduct ?? ''}
                     </td>
                   ) : null}
                   {index === 0 ? (
