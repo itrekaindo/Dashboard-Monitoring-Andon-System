@@ -231,15 +231,36 @@ export default function TimelineContent({
 
   const currentStep = pickCurrentStep(recent, workstations, forcedStep);
 
+  const wsRowsByWs = new Map<number, CurrentWorkstationProgress[]>();
+  for (const row of current) {
+    if (!row || typeof row.current_workstation !== 'number') continue;
+    const existing = wsRowsByWs.get(row.current_workstation) || [];
+    existing.push(row);
+    wsRowsByWs.set(row.current_workstation, existing);
+  }
+
+  const toMillis = (value?: string | Date | null) => {
+    if (!value) return 0;
+    const n = new Date(value).getTime();
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  for (const [ws, rows] of wsRowsByWs.entries()) {
+    rows.sort((a, b) => toMillis(b.current_start_actual) - toMillis(a.current_start_actual));
+    wsRowsByWs.set(ws, rows);
+  }
+
   const currentByWs = new Map<number, CurrentWorkstationProgress>();
   const statusInfo = new Map<number, { status: string; at?: string | Date }>();
 
-  for (const row of current) {
-    if (!row || typeof row.current_workstation !== 'number') continue;
-    if (!currentByWs.has(row.current_workstation)) currentByWs.set(row.current_workstation, row);
-    const st = row.current_status ?? "";
-    const at = row.current_start_actual ?? undefined;
-    if (!statusInfo.has(row.current_workstation)) statusInfo.set(row.current_workstation, { status: st, at });
+  for (const [ws, rows] of wsRowsByWs.entries()) {
+    const latest = rows[0];
+    if (!latest) continue;
+    currentByWs.set(ws, latest);
+    statusInfo.set(ws, {
+      status: latest.current_status ?? "",
+      at: latest.current_start_actual ?? undefined,
+    });
   }
 
   const allowedWs = [1, 2, 3, 4, 5];
@@ -259,6 +280,110 @@ export default function TimelineContent({
     } as WorkstationStats;
   });
 
+  const recentStatusByWs = new Map<number, string>();
+  for (const row of recent) {
+    const ws = parseWsFromStatus(row.status);
+    if (!ws || recentStatusByWs.has(ws)) continue;
+    recentStatusByWs.set(ws, row.status || '');
+  }
+
+  const getStatusByWs = (ws: number) => {
+    return statusInfo.get(ws)?.status || recentStatusByWs.get(ws) || '';
+  };
+
+  const inputCountByWs = new Map<number, number>();
+  for (const [ws, rows] of wsRowsByWs.entries()) {
+    inputCountByWs.set(ws, rows.length);
+  }
+
+  const getTimelineColor = (status?: string) => {
+    const lower = (status || '').toLowerCase();
+    if (lower.includes('tunggu qc')) {
+      return { line: 'bg-blue-500', ring: 'border-blue-400' };
+    }
+    if (lower.includes('istirahat')) {
+      return { line: 'bg-amber-400', ring: 'border-amber-300' };
+    }
+    if (lower.includes('on progress') || lower.includes('masuk')) {
+      return { line: 'bg-emerald-500', ring: 'border-emerald-300' };
+    }
+    return { line: 'bg-gray-600', ring: 'border-gray-500' };
+  };
+
+  const linePairConfigs = [
+    {
+      label: 'Line 1/2',
+      odd: { label: 'Line 1', workstation: 31 },
+      even: { label: 'Line 2', workstation: 32 },
+    },
+    {
+      label: 'Line 3/4',
+      odd: { label: 'Line 3', workstation: 33 },
+      even: { label: 'Line 4', workstation: 34 },
+    },
+    {
+      label: 'Line 5/6',
+      odd: { label: 'Line 5', workstation: 35 },
+      even: { label: 'Line 6', workstation: 36 },
+    },
+  ];
+
+  const oddNodeSlots = [1, 3];
+  const evenNodeSlots = [0, 2, 4];
+
+  const getWorkstationDisplay = (workstation: number) => {
+    const wsData = currentByWs.get(workstation);
+    const info = statusInfo.get(workstation);
+    const status = info?.status || wsData?.current_status || '';
+    const variant = statusVariant(status);
+    const showElapsed = (
+      (status || '').toLowerCase().includes('on progress') ||
+      (status || '').toLowerCase().includes('masuk')
+    ) && (variant.bg.includes('emerald') || variant.bg.includes('blue'));
+    const isWaitingMulai = (status || '').toLowerCase().includes('istirahat');
+    const isWaitingSelesai = (status || '').toLowerCase().includes('on progress') || (status || '').toLowerCase().includes('masuk');
+    const showWaitingElapsed = isWaitingMulai && !isWaitingSelesai;
+
+    return {
+      wsData,
+      info,
+      status,
+      variant,
+      showElapsed,
+      showWaitingElapsed,
+      isPausedWaiting: isWaitingSelesai,
+      estDuration: formatEst(durations.find((d) => d.workstation === workstation)?.actual_duration || null),
+    };
+  };
+
+  const getWorkstationDisplays = (workstation: number) => {
+    const rows = wsRowsByWs.get(workstation) || [];
+    const estDuration = formatEst(durations.find((d) => d.workstation === workstation)?.actual_duration || null);
+
+    return rows.slice(0, 3).map((row) => {
+      const status = row.current_status || '';
+      const variant = statusVariant(status);
+      const showElapsed = (
+        status.toLowerCase().includes('on progress') ||
+        status.toLowerCase().includes('masuk')
+      ) && (variant.bg.includes('emerald') || variant.bg.includes('blue'));
+      const isWaitingMulai = status.toLowerCase().includes('istirahat');
+      const isWaitingSelesai = status.toLowerCase().includes('on progress') || status.toLowerCase().includes('masuk');
+      const showWaitingElapsed = isWaitingMulai && !isWaitingSelesai;
+
+      return {
+        wsData: row,
+        info: { status, at: row.current_start_actual ?? undefined },
+        status,
+        variant,
+        showElapsed,
+        showWaitingElapsed,
+        isPausedWaiting: isWaitingSelesai,
+        estDuration,
+      };
+    });
+  };
+
   return (
     <>
        {/* <style>{arrowAnimationStyle}</style> */}
@@ -276,9 +401,6 @@ export default function TimelineContent({
               Current Production Status {isLoading && <span className="text-xs text-gray-500">(updating...)</span>}
             </p>
           </div>
-          <Badge className="bg-gray-800/70 border border-gray-700 text-gray-200 px-4 py-2">
-            Current: WS {currentStep}
-          </Badge>
         </div>
         
         {/* Estimasi Selesai Produksi */}
@@ -318,91 +440,171 @@ export default function TimelineContent({
         {/* Timeline */}
         {showWorkstationTimeline && (
           <Card className="bg-gray-900/60 border border-gray-700/60 backdrop-blur-sm">
-            <CardContent className="p-6">
-              <div className="w-full">
-                <div className="flex items-center justify-between gap-4 md:gap-6">
-                  {points.map((ws, idx) => {
-                    const isCurrent = ws.workstation === currentStep;
-                    const nextExists = idx < points.length - 1;
-                    const currentWsData = currentByWs.get(ws.workstation);
-                    const estTime = formatEst(currentWsData?.target_durasi || "");
-                    const info = statusInfo.get(ws.workstation ?? 0);
-                    const status = info?.status;
-                    const variant = statusVariant(status);
-                    const showElapsed = (
-                      (status || "").toLowerCase().includes("on progress") || 
-                      (status || "").toLowerCase().includes("masuk") 
-                    ) && (variant.bg.includes("emerald") || variant.bg.includes("blue"));
-                    const isWaitingMulai = (status || "").toLowerCase().includes("istirahat");
-                    const isWaitingSelesai = (status || "").toLowerCase().includes("on progress") || (status || "").toLowerCase().includes("masuk");
-                    const showWaitingElapsed = isWaitingMulai && !isWaitingSelesai;
-                    const isPausedWaiting = isWaitingSelesai;
-                    const baseClass = `${variant.bg} ${variant.border} ${variant.text}`;
-                    const blinkClass = variant.blink ? "animate-pulse" : "";
+            <CardContent className="p-4">
+              <div className="w-full space-y-2">
+                {linePairConfigs.map((pair) => {
+                  const oddLatestDisplay = getWorkstationDisplay(pair.odd.workstation);
+                  const evenLatestDisplay = getWorkstationDisplay(pair.even.workstation);
+                  const oddDisplays = getWorkstationDisplays(pair.odd.workstation);
+                  const evenDisplays = getWorkstationDisplays(pair.even.workstation);
 
-                    return (
-                      <div key={ws.workstation} className="flex flex-col flex-1 min-w-0">
-                        <div className="flex items-center gap-0 h-12">
-                          <div className="flex flex-col items-center shrink-0 w-24">
-                            <div
-                              className={
-                                `w-12 h-12 rounded-full border-2 flex items-center justify-center text-sm font-semibold transition-all ${baseClass} ${blinkClass} ` +
-                                (isCurrent ? "shadow-[0_0_0_8px_rgba(251,191,36,0.15)]" : "")
-                              }
-                            >
-                              WS{ws.workstation}
-                            </div>
-                          </div>
+                  return (
+                    <div key={pair.label} className="grid grid-cols-[64px_1fr] gap-3 items-stretch">
+                      <div className="grid grid-rows-[56px_24px_56px] items-center py-1 text-sm text-gray-300 leading-none">
+                        <div className="text-right self-center">{pair.odd.label}</div>
+                        <div></div>
+                        <div className="text-right self-center">{pair.even.label}</div>
+                      </div>
+                      <div className="relative pt-1 pb-1">
+                        <div className="absolute left-[10%] right-[10%] top-1/2 -translate-y-1/2 h-3 rounded-full bg-gray-700/80"></div>
+                        <div className="relative flex items-center justify-between">
+                          {Array.from({ length: 5 }, (_, nodeIdx) => {
+                            const oddSlotIndex = oddNodeSlots.indexOf(nodeIdx);
+                            const evenSlotIndex = evenNodeSlots.indexOf(nodeIdx);
+                            const oddDisplay = oddSlotIndex >= 0 ? oddDisplays[oddSlotIndex] : undefined;
+                            const evenDisplay = evenSlotIndex >= 0 ? evenDisplays[evenSlotIndex] : undefined;
+                            const display = oddDisplay || evenDisplay;
+                            const color = display?.status ? getTimelineColor(display.status) : null;
+                            const ringClass = color?.ring && color.ring !== 'border-gray-500' ? color.ring : 'border-gray-500';
+                            const hasOddInfo = !!(
+                              oddDisplay?.wsData?.presentase ||
+                              oddDisplay?.wsData?.current_product_name ||
+                              oddDisplay?.wsData?.current_operator_actual_name ||
+                              oddDisplay?.status ||
+                              oddDisplay?.showElapsed ||
+                              oddDisplay?.showWaitingElapsed ||
+                              (oddDisplay?.estDuration && oddDisplay.estDuration !== '—')
+                            );
+                            const hasEvenInfo = !!(
+                              evenDisplay?.wsData?.presentase ||
+                              evenDisplay?.wsData?.current_product_name ||
+                              evenDisplay?.wsData?.current_operator_actual_name ||
+                              evenDisplay?.status ||
+                              evenDisplay?.showElapsed ||
+                              evenDisplay?.showWaitingElapsed ||
+                              (evenDisplay?.estDuration && evenDisplay.estDuration !== '—')
+                            );
+                            const nodeBlinkClass = display?.variant.blink && (hasOddInfo || hasEvenInfo) ? 'animate-pulse' : '';
+                            const showOddSide = hasOddInfo;
+                            const showEvenSide = hasEvenInfo;
 
-                          {nextExists && (
-                            <div className="flex-1 flex items-center px-3 md:px-4 relative">
-                              <div className="relative flex items-center w-full h-8">
-                                <div className="w-full h-[2px] rounded-full bg-gray-700/80">
-                                  <div
-                                    className={`h-[2px] rounded-full transition-all ${variant.blink ? "animate-pulse" : ""} ` +
-                                      (variant.bg.includes("rose")
-                                        ? "bg-rose-500"
-                                        : variant.bg.includes("amber")
-                                          ? "bg-amber-400"
-                                          : variant.bg.includes("emerald")
-                                            ? "bg-emerald-400"
-                                            : variant.bg.includes("blue")
-                                              ? "bg-blue-400"
-                                              : "bg-gray-600")}
-                                    style={{ width: "100%" }}
-                                  />
-                                </div>
-                                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 text-[10px] text-gray-400 whitespace-nowrap">EST : {estTime}</div>
+                            return (
+                              <div key={`${pair.label}-${nodeIdx}`} className="w-1/5 flex flex-col items-center">
+                                {showOddSide ? (
+                                  <div className="h-14 text-[10px] text-gray-300 leading-tight text-center w-24">
+                                    {oddDisplay?.wsData?.presentase ? <div className="text-emerald-400 font-semibold truncate">{`${oddDisplay.wsData.presentase}%`}</div> : null}
+                                    {oddDisplay?.wsData?.current_product_name ? <div className="truncate font-semibold">{oddDisplay.wsData.current_product_name}</div> : null}
+                                    {oddDisplay?.wsData?.current_operator_actual_name ? <div className="truncate">{oddDisplay.wsData.current_operator_actual_name}</div> : null}
+                                    {oddDisplay?.status ? <div className="truncate text-gray-400">{oddDisplay.status}</div> : null}
+                                    {oddDisplay?.showElapsed ? (
+                                      <Elapsed since={oddDisplay.info?.at} className={`text-[10px] truncate ${oddDisplay.variant.bg.includes('blue') ? 'text-blue-400' : 'text-gray-400'}`} />
+                                    ) : oddDisplay?.showWaitingElapsed && oddDisplay.info?.at ? (
+                                      <span className="text-[10px] text-amber-400 truncate"><Elapsed since={oddDisplay.info?.at} isPaused={oddDisplay.isPausedWaiting} /></span>
+                                    ) : oddDisplay?.estDuration && oddDisplay.estDuration !== '—' ? (
+                                      <span className="text-[10px] text-gray-400 truncate">{oddDisplay.estDuration}</span>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  <div className="h-14 w-24"></div>
+                                )}
+
+                                <div className={`w-6 h-6 rounded-full border-[6px] bg-gray-900 ${ringClass} ${nodeBlinkClass}`}></div>
+
+                                {showEvenSide ? (
+                                  <div className="h-14 mt-0.5 text-[10px] text-gray-300 leading-tight text-center w-24">
+                                    {evenDisplay?.wsData?.current_product_name ? <div className="truncate font-semibold">{evenDisplay.wsData.current_product_name}</div> : null}
+                                    {evenDisplay?.wsData?.current_operator_actual_name ? <div className="truncate">{evenDisplay.wsData.current_operator_actual_name}</div> : null}
+                                    {evenDisplay?.status ? <div className="truncate text-gray-400">{evenDisplay.status}</div> : null}
+                                    {evenDisplay?.showElapsed ? (
+                                      <Elapsed since={evenDisplay.info?.at} className={`text-[10px] truncate ${evenDisplay.variant.bg.includes('blue') ? 'text-blue-400' : 'text-gray-400'}`} />
+                                    ) : evenDisplay?.showWaitingElapsed && evenDisplay.info?.at ? (
+                                      <span className="text-[10px] text-amber-400 truncate"><Elapsed since={evenDisplay.info?.at} isPaused={evenDisplay.isPausedWaiting} /></span>
+                                    ) : evenDisplay?.estDuration && evenDisplay.estDuration !== '—' ? (
+                                      <span className="text-[10px] text-gray-400 truncate">{evenDisplay.estDuration}</span>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  <div className="h-14 mt-0.5 w-24"></div>
+                                )}
                               </div>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div className="flex flex-col items-center gap-1 mt-2 shrink-0 w-24">
-                          <div className="text-xs text-emerald-400 font-semibold">{currentByWs.get(ws.workstation)?.presentase ? `${currentByWs.get(ws.workstation)?.presentase}%` : "—"}</div>
-                        </div>
-                        
-                        <div className="flex flex-col mt-3 shrink-0 w-24">
-                          <div className="text-xs text-gray-300 text-center truncate font-semibold">{ws.product_name || "-"}</div>
-                          <div className="text-xs text-gray-300 text-center truncate">{ws.active_operator || "-"}</div>
-                           <div className="text-[10px] text-gray-400 text-center truncate">{ws.current_status || "-"}</div>
-                          {showElapsed ? (
-                            <Elapsed since={info?.at} className={`text-[11px] text-center truncate ${
-                              variant.bg.includes("blue") ? "text-blue-400" : "text-gray-400"
-                            }`} />
-                          ) : showWaitingElapsed && info?.at ? (
-                            <div className="text-[11px] text-amber-400 text-center truncate font-semibold">
-                              <Elapsed since={info?.at} isPaused={isPausedWaiting} />
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-gray-400 text-center truncate">
-                              {formatEst(durations.find(d => d.workstation === ws.workstation)?.actual_duration || null)}
-                            </span>
-                          )}
+                            );
+                          })}
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  );
+                })}
+
+                <div className="grid grid-cols-[64px_1fr] gap-3 items-stretch -mt-6">
+                  <div className="grid grid-rows-[56px_24px_56px] items-center py-1 text-sm text-gray-300 leading-none">
+                    <div></div>
+                    <div></div>
+                    <div className="text-right self-start pt-1">Line 7</div>
+                  </div>
+                  <div className="relative pt-1 pb-1">
+                    <div className="absolute left-[10%] right-[10%] top-[64px] h-3 rounded-full bg-gray-700/80"></div>
+                    <div className="relative flex items-center justify-between">
+                      {points.map((ws) => {
+                        const currentWsData = currentByWs.get(ws.workstation);
+                        const info = statusInfo.get(ws.workstation ?? 0);
+                        const status = info?.status;
+                        const variant = statusVariant(status);
+                        const showElapsed = (
+                          (status || "").toLowerCase().includes("on progress") ||
+                          (status || "").toLowerCase().includes("masuk")
+                        ) && (variant.bg.includes("emerald") || variant.bg.includes("blue"));
+                        const isWaitingMulai = (status || "").toLowerCase().includes("istirahat");
+                        const isWaitingSelesai = (status || "").toLowerCase().includes("on progress") || (status || "").toLowerCase().includes("masuk");
+                        const showWaitingElapsed = isWaitingMulai && !isWaitingSelesai;
+                        const hasInfo = !!(
+                          ws.product_name ||
+                          ws.active_operator ||
+                          ws.current_status ||
+                          currentWsData?.presentase
+                        );
+                        const ringClass = hasInfo ? variant.border : 'border-gray-500';
+                        const nodeBlinkClass = hasInfo && variant.blink ? 'animate-pulse' : '';
+
+                        return (
+                          <div key={ws.workstation} className="w-1/5 flex flex-col items-center">
+                            <div className="h-[58px] w-24"></div>
+
+                            <div className={`w-6 h-6 rounded-full border-[6px] bg-gray-900 ${ringClass} ${nodeBlinkClass}`}></div>
+
+                            <div className="flex flex-col items-center gap-1 mt-2 shrink-0 w-24">
+                              <div className="text-xs text-emerald-400 font-semibold">
+                                {currentWsData?.presentase ? `${currentWsData.presentase}%` : "—"}
+                              </div>
+                            </div>
+
+                            {hasInfo ? (
+                              <div className="h-14 mt-0.5 text-[10px] text-gray-300 leading-tight text-center w-24">
+                                {ws.product_name ? <div className="truncate font-semibold">{ws.product_name}</div> : null}
+                                {ws.active_operator ? <div className="truncate">{ws.active_operator}</div> : null}
+                                {ws.current_status ? <div className="truncate text-gray-400">{ws.current_status}</div> : null}
+                                {showElapsed ? (
+                                  <Elapsed
+                                    since={info?.at}
+                                    className={`text-[10px] truncate ${variant.bg.includes('blue') ? 'text-blue-400' : 'text-gray-400'}`}
+                                  />
+                                ) : showWaitingElapsed && info?.at ? (
+                                  <span className="text-[10px] text-amber-400 truncate">
+                                    <Elapsed since={info?.at} isPaused={isWaitingSelesai} />
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-gray-400 truncate">
+                                    {formatEst(durations.find(d => d.workstation === ws.workstation)?.actual_duration || null)}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="h-14 mt-0.5 w-24"></div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>

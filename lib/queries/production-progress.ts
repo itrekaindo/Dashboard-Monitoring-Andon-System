@@ -534,7 +534,7 @@ export interface AbnormalProgress {
   kategori?: string | null;
 }
 
-// Get latest active process per workstation (finish_actual is null)
+// Get up to 3 latest active processes per workstation (finish_actual is null)
 export async function getRecentProgress(line?: string): Promise<CurrentWorkstationProgress[]> {
   try {
     const progressTable = getProductionProgressTableByLine(line);
@@ -560,7 +560,8 @@ WITH RankedData AS (
     ${line ? sql`AND pp.line = ${line}` : sql``}
 )
 SELECT * FROM RankedData 
-WHERE urutan = 1;
+WHERE urutan <= 3
+ORDER BY current_workstation ASC, urutan ASC;
     `);
     
     const rows = extractRows(result);
