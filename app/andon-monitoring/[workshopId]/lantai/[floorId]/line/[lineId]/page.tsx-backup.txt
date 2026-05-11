@@ -88,7 +88,7 @@ export default async function LinePage({ params }: PageProps) {
     // Convert lineid "1" menjadi "Lt 1 Line 1" atau sesuai format database
     const lineValue = `Lt 1 Line ${lineId}`; // Sesuaikan dengan lantai dari params
     
-    console.log("Looking for line:", lineValue); // Debug
+    //console.log("Looking for line:", lineValue); // Debug
     
     const result = await db.execute(sql`
       SELECT * FROM production_progress
@@ -96,7 +96,7 @@ export default async function LinePage({ params }: PageProps) {
     `);
     
     const rows = Array.isArray(result[0]) ? result[0] : result;
-    console.log("Rows found:", rows.length);
+    //console.log("Rows found:", rows.length);
     
     productionData = rows as ProductionProgress[];
   } catch (error) {

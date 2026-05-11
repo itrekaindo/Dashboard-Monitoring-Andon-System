@@ -2,11 +2,14 @@ import ModernSidebar from "@/components/ui/sidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import MonitoringKpmFilters from "./monitoring-kpm-filters";
+import MaterialOutLineChart from "@/components/material/MaterialOutLineChart";
 import {
   getMonitoringKpmFilterOptions,
   getMonitoringKpmRows,
   type MonitoringKpmSortBy,
   type SortDirection,
+  getMaterialOutLineChart,
+  getAvailableMonths,
 } from "@/lib/queries/stok_material";
 
 interface MonitoringKpmPageProps {
@@ -24,6 +27,16 @@ const SORTABLE_COLUMNS: Array<{ key: MonitoringKpmSortBy; label: string }> = [
 function getQueryValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return (value[0] ?? "").trim();
   return (value ?? "").trim();
+}
+
+function getCurrentMonthValue() {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  return `${today.getFullYear()}-${month}`;
+}
+
+function isMonthValue(value: string) {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 }
 
 function formatDate(value: string | null) {
@@ -54,6 +67,9 @@ export default async function MonitoringKpmPage({ searchParams }: MonitoringKpmP
   const postDate = getQueryValue(resolvedSearchParams.post_date);
   const proyek = getQueryValue(resolvedSearchParams.proyek);
   const search = getQueryValue(resolvedSearchParams.search);
+  const requestedMonth = getQueryValue(resolvedSearchParams.month);
+  const defaultMonth = getCurrentMonthValue();
+  const selectedMonth = isMonthValue(requestedMonth) ? requestedMonth : defaultMonth;
 
   const allowedSortBy: MonitoringKpmSortBy[] = [
     "no",
@@ -68,7 +84,7 @@ export default async function MonitoringKpmPage({ searchParams }: MonitoringKpmP
   const requestedSortDir = getQueryValue(resolvedSearchParams.sortDir);
   const sortDir: SortDirection = requestedSortDir === "asc" ? "asc" : "desc";
 
-  const [rows, filterOptions] = await Promise.all([
+  const [rows, filterOptions, materialOutLineChart, availableMonths] = await Promise.all([
     getMonitoringKpmRows({
       st,
       postDate,
@@ -79,9 +95,12 @@ export default async function MonitoringKpmPage({ searchParams }: MonitoringKpmP
       limit: 300,
     }),
     getMonitoringKpmFilterOptions(),
+    getMaterialOutLineChart(selectedMonth),
+    getAvailableMonths(),
   ]);
 
   const baseParams = new URLSearchParams();
+  if (selectedMonth) baseParams.set("month", selectedMonth);
   if (st) baseParams.set("st", st);
   if (postDate) baseParams.set("post_date", postDate);
   if (proyek) baseParams.set("proyek", proyek);
@@ -97,11 +116,24 @@ export default async function MonitoringKpmPage({ searchParams }: MonitoringKpmP
           </p>
         </div>
 
+        <MaterialOutLineChart
+          data={materialOutLineChart}
+          monthLabel={new Intl.DateTimeFormat('id-ID', {
+            month: 'long',
+            year: 'numeric',
+          }).format(new Date(`${selectedMonth}-01`))}
+        />
+
+        
+
         <Card className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50">
           <CardContent className="p-4">
             <MonitoringKpmFilters
               stOptions={filterOptions.stOptions}
               proyekOptions={filterOptions.proyekOptions}
+              availableMonths={availableMonths}
+              currentMonth={selectedMonth}
+              defaultMonth={defaultMonth}
               currentSt={st}
               currentPostDate={postDate}
               currentSearch={search}

@@ -52,6 +52,66 @@ export interface WorkstationStats {
   id_perproduct: string | null;
 }
 
+export interface ProductPercentageLantai2 {
+  id_product: string;
+  trainset: string | number;
+  product_name: string | null;
+  jumlah_tiapts: number | null;
+  proses_produk: string | null;
+  line: string | null;
+  status: string;
+  percentage: number;
+  qty_progress: number;
+  total: number;
+  tanggal_mulai: Date | string | null;
+}
+
+export interface ProductSummaryLantai2 {
+  id_product: string;
+  trainset: string | number;
+  product_name: string | null;
+  line: string | null;
+  percentage: number; // Average of 2 processes
+  percentage_cutting: number;
+  percentage_marking: number;
+  qty_progress: number; // Total qty from both processes
+  total: number; // Target total
+  tanggal_mulai: Date | string | null;
+  tanggal_selesai: Date | string | null;
+  start_actual: Date | string | null;
+  finish_actual: Date | string | null;
+}
+
+export interface ProductPercentageLantai1 {
+  id_product: string;
+  trainset: string | number;
+  product_name: string | null;
+  jumlah_tiapts: number | null;
+  proses_produk: string | null;
+  line: string | null;
+  status: string;
+  percentage: number;
+  qty_progress: number;
+  total: number;
+  tanggal_mulai: Date | string | null;
+}
+
+export interface ProductSummaryLantai1 {
+  id_product: string;
+  trainset: string | number;
+  product_name: string | null;
+  line: string | null;
+  percentage: number;
+  percentage_cutting: number;
+  percentage_marking: number;
+  qty_progress: number;
+  total: number;
+  tanggal_mulai: Date | string | null;
+  tanggal_selesai: Date | string | null;
+  start_actual: Date | string | null;
+  finish_actual: Date | string | null;
+}
+
 // Get all production progress records
 export async function getAllProductionProgress(): Promise<ProductionProgress[]> {
   try {
@@ -886,7 +946,7 @@ export async function searchProductionProgress(searchTerm: string): Promise<Prod
 export async function logProductionProgressSample(limit: number = 10): Promise<ProductionProgress[]> {
   try {
     const data = await getRecentProductionProgressLantai3(limit);
-    console.log(`[production_progress] showing ${data.length} rows (limit ${limit}):`, data);
+    //console.log(`[production_progress] showing ${data.length} rows (limit ${limit}):`, data);
     return data;
   } catch (error) {
     console.error("Failed to log production progress sample:", error);
@@ -1062,6 +1122,553 @@ ORDER BY
     return rows;
   } catch (error) {
     console.error("Failed to fetch product schedule:", error);
+    return [];
+  }
+}
+
+
+export async function getProductPercentageLantai2(): Promise<ProductPercentageLantai2[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT 
+    j.id_product, 
+    j.trainset, 
+    j.product_name, 
+    j.jumlah_tiapts, 
+    j.proses_produk, 
+    j.line,
+    COALESCE(pp.status, '-') AS status, 
+    COALESCE(pp.percentage, 0) AS percentage, 
+    COALESCE(pp.qty_progress, 0) AS qty_progress, 
+    COALESCE(pp.total, 0) AS total,
+    j.tanggal_mulai
+
+FROM jadwal j
+
+LEFT JOIN (
+    SELECT p.*
+    FROM production_progress_protrack p
+    JOIN (
+        SELECT 
+            id_product, 
+            trainset, 
+            sub_process, 
+            MAX(start_actual) AS max_time
+        FROM production_progress_protrack
+        GROUP BY id_product, trainset, sub_process
+    ) latest
+    ON p.id_product = latest.id_product
+    AND p.trainset = latest.trainset
+    AND p.sub_process = latest.sub_process
+    AND p.start_actual = latest.max_time
+) pp
+ON j.id_product = pp.id_product
+AND j.trainset = pp.trainset
+AND j.proses_produk = pp.sub_process
+
+WHERE j.line = 'Lantai 2'
+
+ORDER BY j.product_name ASC;
+          `);
+
+    const rows = extractRows(result);
+    return rows as ProductPercentageLantai2[];
+  } catch (error) {
+    console.error("Failed to fetch product percentage:", error);
+    return [];
+  }
+}
+
+export async function getProductSummaryLantai2(trainset: string | number): Promise<ProductSummaryLantai2[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT 
+    j.id_product,
+    j.trainset,
+    j.product_name,
+    j.line,
+
+MAX(CASE 
+    WHEN p.sub_process = 'Cutting' 
+    THEN p.percentage 
+END) AS percentage_cutting,
+
+SUM(CASE 
+    WHEN p.sub_process = 'Marking dan Crimping' 
+    THEN COALESCE(p.percentage, 0) ELSE 0 
+END) AS percentage_marking,
+
+ROUND((
+    COALESCE(MAX(CASE 
+        WHEN p.sub_process = 'Cutting' 
+        THEN p.percentage 
+    END), 0)
+    +
+    COALESCE(MAX(CASE 
+        WHEN p.sub_process = 'Marking dan Crimping' 
+        THEN p.percentage 
+    END), 0)
+) / 2) AS percentage,
+
+    MAX(COALESCE(p.qty_progress, 0)) AS qty_progress,
+
+    MAX(j.jumlah_tiapts) AS total,
+
+    MIN(j.tanggal_mulai) AS tanggal_mulai,
+    MAX(j.tanggal_selesai) AS tanggal_selesai,
+
+    MIN(p.start_actual) AS start_actual,
+    MAX(p.start_actual) AS finish_actual
+
+FROM jadwal j
+
+LEFT JOIN (
+    SELECT p1.*
+    FROM production_progress_protrack p1
+    JOIN (
+        SELECT 
+            id_product, 
+            trainset, 
+            sub_process, 
+            MAX(start_actual) AS max_time
+        FROM production_progress_protrack
+        WHERE line = 'Lantai 2'
+          AND trainset = ${trainset}
+        GROUP BY id_product, trainset, sub_process
+    ) latest
+    ON p1.id_product = latest.id_product
+    AND p1.trainset = latest.trainset
+    AND p1.sub_process = latest.sub_process
+    AND p1.start_actual = latest.max_time
+    WHERE p1.trainset = ${trainset}
+) p
+ON j.id_product = p.id_product
+AND j.trainset = p.trainset   
+
+WHERE j.line = 'Lantai 2'
+  AND j.trainset = ${trainset}
+
+GROUP BY 
+    j.id_product,
+    j.trainset,
+    j.product_name,
+    j.line
+
+ORDER BY j.product_name ASC;
+    `);
+
+    const rows = extractRows(result);
+    return rows as ProductSummaryLantai2[];
+  } catch (error) {
+    console.error("Failed to fetch product summary Lantai 2:", error);
+    return [];
+  }
+}
+
+export async function getProductPercentageLantai1(): Promise<ProductPercentageLantai1[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT 
+    j.id_product, 
+    j.trainset, 
+    j.product_name, 
+    j.jumlah_tiapts, 
+    j.proses_produk, 
+    j.line,
+    COALESCE(pp.status, '-') AS status, 
+    COALESCE(pp.percentage, 0) AS percentage, 
+    COALESCE(pp.qty_progress, 0) AS qty_progress, 
+    COALESCE(pp.total, 0) AS total,
+    j.tanggal_mulai
+FROM jadwal j
+LEFT JOIN (
+    SELECT p.*
+    FROM production_progress_protrack p
+    JOIN (
+        SELECT 
+            id_product, 
+            trainset, 
+            process_name, 
+            MAX(start_actual) AS max_time
+        FROM production_progress_protrack
+        GROUP BY id_product, trainset, process_name
+    ) latest
+    ON p.id_product = latest.id_product
+    AND p.trainset = latest.trainset
+    AND p.process_name = latest.process_name
+    AND p.start_actual = latest.max_time
+) pp
+ON j.id_product = pp.id_product
+AND j.trainset = pp.trainset
+AND j.proses_produk = pp.process_name
+WHERE j.line = 'Lantai 1'
+ORDER BY j.product_name ASC;
+          `);
+
+    const rows = extractRows(result);
+    return rows as ProductPercentageLantai1[];
+  } catch (error) {
+    console.error("Failed to fetch product percentage Lantai 1:", error);
+    return [];
+  }
+}
+
+export async function getProductSummaryLantai1(trainset: string | number): Promise<ProductSummaryLantai1[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT 
+    j.id_product,
+    j.trainset,
+    j.product_name,
+    j.line,
+
+    /* =====================================
+       PERSENTASE AKTUAL
+       ===================================== */
+    CASE
+        WHEN MAX(
+            CASE 
+                WHEN p.sub_output = 'Finish Good'
+                     AND p.percentage = 100
+                THEN 1
+                ELSE 0
+            END
+        ) = 1
+        THEN 100
+
+        ELSE ROUND(
+            MAX(COALESCE(p.percentage, 0))
+            /
+            MAX(COALESCE(mp.jumlah_proses_per_line, 1))
+        , 0)
+    END AS percentage,
+
+    MAX(COALESCE(p.percentage, 0)) AS actual_percentage,
+
+    MAX(COALESCE(mp.jumlah_proses_per_line, 1)) AS total_proses,
+
+    COUNT(DISTINCT p.sub_output) AS actual_sub_output,
+
+    MAX(COALESCE(p.qty_progress, 0)) AS qty_progress,
+
+    /* =========================
+       TOTAL DARI p.total
+       ========================= */
+    MAX(COALESCE(p.total, 0)) AS total,
+
+    MIN(j.tanggal_mulai) AS tanggal_mulai,
+    MAX(j.tanggal_selesai) AS tanggal_selesai,
+
+    MIN(p.start_actual) AS start_actual,
+    MAX(p.start_actual) AS finish_actual
+
+FROM jadwal j
+
+/* =========================
+   ACTUAL TERAKHIR
+   ========================= */
+LEFT JOIN (
+    SELECT p1.*
+    FROM production_progress_protrack p1
+
+    JOIN (
+        SELECT 
+            id_product, 
+            trainset,
+            sub_output,
+            MAX(start_actual) AS max_time
+
+        FROM production_progress_protrack
+
+        WHERE line = 'Lantai 1'
+          AND trainset = ${trainset}
+
+        GROUP BY 
+            id_product, 
+            trainset,
+            sub_output
+
+    ) latest
+        ON p1.id_product = latest.id_product
+        AND p1.trainset = latest.trainset
+        AND p1.sub_output = latest.sub_output
+        AND p1.start_actual = latest.max_time
+
+    WHERE p1.trainset = ${trainset}
+
+) p
+    ON j.id_product = p.id_product
+    AND j.trainset = p.trainset   
+
+/* =========================
+   MASTER PROSES
+   ========================= */
+LEFT JOIN master_proses_cs mp
+    ON j.id_product = mp.id_product
+    AND j.line = mp.line
+
+WHERE j.line = 'Lantai 1'
+  AND j.trainset = ${trainset}
+
+GROUP BY 
+    j.id_product,
+    j.trainset,
+    j.product_name,
+    j.line
+
+ORDER BY j.product_name ASC;
+    `);
+
+    const rows = extractRows(result);
+    return rows as ProductSummaryLantai1[];
+  } catch (error) {
+    console.error("Failed to fetch product summary Lantai 1:", error);
+    return [];
+  }
+}
+
+// Get history for a product (production_progress_protrack) filtered by id_product and trainset
+export async function getProductProgressProtrackHistory(
+  id_product: string,
+  trainset: string | number,
+  line: 'Lantai 1' | 'Lantai 2' = 'Lantai 1'
+): Promise<any[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT
+    p.operator_actual_name,
+    p.process_name,
+    p.sub_process,
+    p.sub_output,
+    p.start_actual,
+    p.status,
+    p.percentage,
+    p.qty_progress,
+    p.total,
+    p.note_qc
+
+FROM (
+    SELECT *,
+        ROW_NUMBER() OVER (
+            PARTITION BY 
+                id_product,
+                trainset,
+                operator_actual_name,
+                process_name,
+                sub_process,
+                start_actual
+            ORDER BY id_process DESC
+        ) AS rn
+
+    FROM production_progress_protrack
+
+    WHERE id_product = ${id_product}
+      AND trainset = ${trainset}
+      AND line = ${line}
+) p
+
+WHERE p.rn = 1
+
+ORDER BY p.start_actual DESC;
+    `);
+
+    const rows = extractRows(result);
+    return rows;
+  } catch (error) {
+    console.error('Failed to fetch protrack history:', error);
+    return [];
+  }
+}
+/*
+export async function getProductProgressProtrackHistoryLantai2(
+  id_product: string,
+  trainset: string | number,
+  line: 'Lantai 1' | 'Lantai 2' = 'Lantai 1'
+): Promise<any[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT
+    p.operator_actual_name,
+    p.process_name,
+    p.sub_process,
+    p.sub_output,
+    p.start_actual,
+    p.status,
+    p.percentage,
+    p.qty_progress,
+    p.total,
+    p.note_qc
+
+FROM (
+    SELECT *,
+        ROW_NUMBER() OVER (
+            PARTITION BY 
+                id_product,
+                trainset,
+                operator_actual_name,
+                process_name,
+                sub_process,
+                start_actual
+            ORDER BY id_process DESC
+        ) AS rn
+
+    FROM production_progress_protrack
+
+    WHERE id_product = ${id_product}
+      AND trainset = ${trainset}
+      AND line = ${line}
+) p
+
+WHERE p.rn = 1
+
+ORDER BY p.start_actual DESC;
+    `);
+
+    const rows = extractRows(result);
+    return rows;
+  } catch (error) {
+    console.error('Failed to fetch protrack history:', error);
+    return [];
+  }
+}
+  */
+
+// Get sub process yang belum diinput berdasarkan master_proses_cs
+export async function getMissingSubProcessLantai1(
+  id_product: string,
+  trainset: string | number
+): Promise<any[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT
+    mp.product_name,
+    mp.line,
+    mp.sub_output,
+    mp.proses,
+    mp.sub_proses,
+
+    mp.qty_total
+
+FROM master_proses_cs mp
+
+/* =====================================
+   CEK APAKAH SUB PROSES SUDAH ADA
+   DI ACTUAL
+   ===================================== */
+LEFT JOIN (
+    SELECT DISTINCT
+        id_product,
+        trainset,
+        process_name,
+        sub_process,
+        sub_output
+
+    FROM production_progress_protrack
+
+    WHERE trainset = ${trainset}
+      AND line = 'Lantai 1'
+
+) p
+    ON mp.id_product = p.id_product
+    AND mp.proses = p.process_name
+    AND mp.sub_proses = p.sub_process
+    AND mp.sub_output = p.sub_output
+
+/* =====================================
+   HANYA TAMPILKAN YANG BELUM ADA
+   ===================================== */
+WHERE mp.id_product = ${id_product}
+  AND mp.line = 'Lantai 1'
+  AND p.sub_process IS NULL
+
+  /* =====================================
+     EXCLUDE SUB PROSES TERTENTU
+     ===================================== */
+  AND mp.sub_proses NOT IN (
+      'SPS',
+      'QC REKA',
+      'Pembuatan Name plate dan Marking'
+  )
+
+ORDER BY 
+    mp.proses ASC,
+    mp.sub_proses ASC;
+    `);
+
+    const rows = extractRows(result);
+    return rows;
+  } catch (error) {
+    console.error('Failed to fetch missing sub process:', error);
+    return [];
+  }
+}
+
+
+export async function getMissingSubProcessLantai2(
+  id_product: string,
+  trainset: string | number
+): Promise<any[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT
+    mp.product_name,
+    mp.line,
+    mp.sub_output,
+    mp.proses,
+    mp.sub_proses,
+
+    mp.qty_total
+
+FROM master_proses_cs mp
+
+/* =====================================
+   CEK APAKAH SUB PROSES SUDAH ADA
+   DI ACTUAL
+   ===================================== */
+LEFT JOIN (
+    SELECT DISTINCT
+        id_product,
+        trainset,
+        process_name,
+        sub_process,
+        sub_output
+
+    FROM production_progress_protrack
+
+    WHERE trainset = ${trainset}
+      AND line = 'Lantai 2'
+
+) p
+    ON mp.id_product = p.id_product
+    AND mp.proses = p.process_name
+    AND mp.sub_proses = p.sub_process
+    AND mp.sub_output = p.sub_output
+
+/* =====================================
+   HANYA TAMPILKAN YANG BELUM ADA
+   ===================================== */
+WHERE mp.id_product = ${id_product}
+  AND mp.line = 'Lantai 2'
+  AND p.sub_process IS NULL
+
+  /* =====================================
+     EXCLUDE SUB PROSES TERTENTU
+     ===================================== */
+  AND mp.sub_proses NOT IN (
+      'SPS',
+      'QC REKA',
+      'Pembuatan Name plate dan Marking'
+  )
+
+ORDER BY 
+    mp.proses ASC,
+    mp.sub_proses ASC;
+    `);
+
+    const rows = extractRows(result);
+    return rows;
+  } catch (error) {
+    console.error('Failed to fetch missing sub process:', error);
     return [];
   }
 }

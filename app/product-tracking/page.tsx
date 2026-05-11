@@ -1,12 +1,13 @@
 'use client';
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import ModernSidebar from "@/components/ui/sidebar";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, Package, Clock, CheckCircle, AlertCircle, TrendingUp, ChevronDown, ChevronUp, ShoppingCart } from "lucide-react";
+import { Search, Package, Clock, CheckCircle, AlertCircle, TrendingUp, ChevronDown, ChevronUp, ShoppingCart, FileText, LogOut } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import ReportModal from "@/components/ui/ReportModal";
 
 interface Product {
   product_name: string;
@@ -75,6 +76,7 @@ interface HistoryLookupEvent {
 
 function ProductTrackingContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [trackingIds, setTrackingIds] = useState('');
   const [results, setResults] = useState<TrackingResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -96,6 +98,10 @@ function ProductTrackingContent() {
   const [expandedMaterialRows, setExpandedMaterialRows] = useState<{ [key: string]: boolean }>({});
   const [userRole, setUserRole] = useState<string | null>(null);
   const [stokMaterialTimelines, setStokMaterialTimelines] = useState<{ [key: string]: MaterialTimelineEvent[] }>({});
+  const [isExternalUser, setIsExternalUser] = useState(false);
+  const [isCheckingUser, setIsCheckingUser] = useState(true);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [selectedResultForReport, setSelectedResultForReport] = useState<{ serialNumber: string | null; productName: string | null } | null>(null);
 
   // Fetch products on mount
   useEffect(() => {
@@ -104,7 +110,7 @@ function ProductTrackingContent() {
         const response = await fetch('/api/product-tracking/products');
         if (response.ok) {
           const data = await response.json();
-          console.log('Products data:', data.products);
+          //console.log('Products data:', data.products);
           setProducts(data.products || []);
         }
       } catch (err) {
@@ -117,17 +123,21 @@ function ProductTrackingContent() {
     fetchProducts();
   }, []);
 
-  // Fetch current user role
+  // Fetch current user role and check if external user
   useEffect(() => {
     const fetchUserRole = async () => {
       try {
         const response = await fetch('/api/auth/me');
         if (response.ok) {
           const data = await response.json();
-          setUserRole(data.user?.role || null);
+          const role = String(data.user?.role || '').trim().toUpperCase();
+          setUserRole(role || null);
+          setIsExternalUser(role === 'EKSTERNAL');
         }
       } catch (err) {
         console.error('Error fetching user role:', err);
+      } finally {
+        setIsCheckingUser(false);
       }
     };
 
@@ -283,7 +293,7 @@ function ProductTrackingContent() {
       );
       if (response.ok) {
         const data = await response.json();
-        console.log('Trainsets:', data.trainsets);
+        //console.log('Trainsets:', data.trainsets);
         setTrainsets(data.trainsets || []);
       }
     } catch (err) {
@@ -302,7 +312,7 @@ function ProductTrackingContent() {
       );
       if (response.ok) {
         const data = await response.json();
-        console.log('Car variants:', data.car_variants);
+        //console.log('Car variants:', data.car_variants);
         setCarVariants(data.car_variants || []);
       }
     } catch (err) {
@@ -355,7 +365,7 @@ function ProductTrackingContent() {
       );
       if (response.ok) {
         const data = await response.json();
-        console.log('Serial numbers:', data.serial_numbers);
+        //console.log('Serial numbers:', data.serial_numbers);
         setSerialNumbers(data.serial_numbers || []);
       }
     } catch (err) {
@@ -440,6 +450,26 @@ function ProductTrackingContent() {
       ...prev,
       [key]: !prev[key],
     }));
+  };
+
+  const openReportModal = (serialNumber: string | null, productName: string | null) => {
+    setSelectedResultForReport({ serialNumber, productName });
+    setIsReportModalOpen(true);
+  };
+
+  const closeReportModal = () => {
+    setIsReportModalOpen(false);
+    setSelectedResultForReport(null);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+      router.push('/login');
+    }
   };
 
   const getStatusColor = (status?: string) => {
@@ -548,9 +578,21 @@ function ProductTrackingContent() {
     });
   };
 
+  const isRestrictedUser = (userRole || '').trim().toUpperCase() === 'EKSTERNAL';
+  const canViewMaterialDetails = !isRestrictedUser && userRole !== 'GUEST';
+
   return (
-    <ModernSidebar>
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6 sm:p-8">
+    <div>
+      {isCheckingUser ? (
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6 sm:p-8 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-400">Memverifikasi pengguna...</p>
+          </div>
+        </div>
+      ) : !isRestrictedUser ? (
+        <ModernSidebar>
+          <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6 sm:p-8">
         <div className="max-w-6xl mx-auto space-y-8">
           
           {/* Header */}
@@ -571,7 +613,8 @@ function ProductTrackingContent() {
         <Card className="bg-gray-800/50 border border-gray-700/60 backdrop-blur-sm">
           <CardContent className="p-6 space-y-6">
             
-            {/* Product & Trainset & Variant & Serial Number Dropdowns */}
+            {/* Product & Trainset & Variant & Serial Number Dropdowns - Hidden for external users */}
+            {!isRestrictedUser && (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Product Dropdown */}
               <div className="space-y-2">
@@ -717,6 +760,7 @@ function ProductTrackingContent() {
                 </p>
               </div>
             </div>
+            )}
 
             {/* Manual Input */}
             <div className="space-y-2">
@@ -985,7 +1029,7 @@ function ProductTrackingContent() {
                                          {getStatusMessage(event)}
                                       </p>
 
-                                      {hasMaterialDetails && userRole !== 'GUEST' && (
+                                      {hasMaterialDetails && canViewMaterialDetails && (
                                         <div className="pt-2 space-y-3">
                                           <button
                                             type="button"
@@ -1057,9 +1101,401 @@ function ProductTrackingContent() {
           </Card>
         )}
 
-      </div>
+          </div>
+        </div>
+        </ModernSidebar>
+      ) : (
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6 sm:p-8">
+          <div className="max-w-6xl mx-auto space-y-8">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
+                  <Package className="w-8 h-8 text-blue-400" />
+                  Product Tracking
+                </h1>
+                <p className="text-gray-400 flex items-center gap-2">
+                  <Search className="w-4 h-4 text-blue-400" />
+                  Lacak status produksi dengan memasukkan ID Produk
+                </p>
+              </div>
+            </div>
+
+            {/* Search Form */}
+            <Card className="bg-gray-800/50 border border-gray-700/60 backdrop-blur-sm">
+              <CardContent className="p-6 space-y-6">
+
+                {/* Manual Input Only - No Dropdowns for External Users */}
+                <div className="space-y-2">
+                  <label className="text-white font-semibold text-sm">
+                   Product Serial Number :
+                  </label>
+                  <textarea
+                    value={trackingIds}
+                    onChange={(e) => setTrackingIds(e.target.value)}
+                    placeholder="Format Penulisan : 'ID Produk/Jenis Car-Serial Number/Trainset' Contoh: 496A18003/K3-158/47"
+                    className="w-full px-4 py-2 bg-gray-900/60 border border-gray-700 rounded-lg text-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+                    rows={2}
+                  />
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <span>💡</span>
+                    Tip: Anda dapat Scan QR code atau scan barcode menggunakan scanner untuk pelacakan otomatis
+                  </p>
+                </div>
+
+                {error && (
+                  <div className="flex items-center gap-2 p-3 bg-red-900/30 border border-red-600 rounded-lg">
+                    <AlertCircle className="w-5 h-5 text-red-400" />
+                    <p className="text-red-400 text-sm">{error}</p>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => handleTrack()}
+                  disabled={isLoading}
+                  className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-lg transition-all shadow-lg shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Melacak...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-5 h-5" />
+                      Lacak Produk
+                    </>
+                  )}
+                </button>
+              </CardContent>
+            </Card>
+
+            {/* Results */}
+            {results.length > 0 && (
+              <div className="space-y-4">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <TrendingUp className="w-6 h-6 text-blue-400" />
+                  Hasil Pelacakan 
+                </h2>
+
+                <div className="grid gap-4">
+                  {results.map((result, idx) => {
+                    const statusColor = getStatusColor(result.status);
+                    const mergedHistoryEvents = getMergedHistoryEvents(result.id_perproduct);
+                    
+                    return (
+                      <Card key={idx} className="bg-gray-800/50 border border-gray-700/60 hover:border-blue-500/50 transition-all">
+                        <CardContent className="p-6">
+                          <div className="space-y-4">
+                            
+                            {/* Header */}
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="space-y-1 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <Package className="w-5 h-5 text-blue-400" />
+                                  <h3 className="text-lg font-bold text-white">
+                                    {result.product_name || '—'}
+                                  </h3>
+                                </div>
+                                <p className="text-sm text-gray-400">
+                                  {result.id_perproduct}
+                                </p>
+                              </div>
+                              <Badge className={`${statusColor.bg} ${statusColor.text} border-0`}>
+                                {result.status || 'Unknown'}
+                              </Badge>
+                            </div>
+
+                            {/* Process Stages */}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                {/* Stage 1: Material Dikirim */}
+                                <div className="flex flex-col items-center flex-1">
+                                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                                    getProcessStage(result.status) >= 1 
+                                      ? 'bg-emerald-500/20 border-2 border-emerald-500' 
+                                      : 'bg-gray-700/20 border-2 border-gray-600'
+                                  }`}>
+                                    {getProcessStage(result.status) >= 1 ? (
+                                      <CheckCircle className={`w-6 h-6 ${
+                                        getProcessStage(result.status) >= 1 ? 'text-emerald-500' : 'text-gray-500'
+                                      }`} />
+                                    ) : (
+                                      <Package className="w-6 h-6 text-gray-500" />
+                                    )}
+                                  </div>
+                                  <p className={`text-xs mt-2 text-center ${
+                                    getProcessStage(result.status) >= 1 ? 'text-emerald-400 font-semibold' : 'text-gray-500'
+                                  }`}>
+                                    Material<br/>Dikirim
+                                  </p>
+                                </div>
+
+                                {/* Connector Line 1-2 */}
+                                <div className={`flex-1 h-0.5 mx-2 ${
+                                  getProcessStage(result.status) >= 2 ? 'bg-emerald-500' : 'bg-gray-600'
+                                }`}></div>
+
+                                {/* Stage 2: Proses Assembling */}
+                                <div className="flex flex-col items-center flex-1">
+                                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                                    getProcessStage(result.status) >= 2 
+                                      ? getProcessStage(result.status) === 2
+                                        ? 'bg-blue-500/20 border-2 border-blue-500 animate-pulse'
+                                        : 'bg-emerald-500/20 border-2 border-emerald-500'
+                                      : 'bg-gray-700/20 border-2 border-gray-600'
+                                  }`}>
+                                    {getProcessStage(result.status) > 2 ? (
+                                      <CheckCircle className="w-6 h-6 text-emerald-500" />
+                                    ) : (
+                                      <Package className={`w-6 h-6 ${
+                                        getProcessStage(result.status) === 2 ? 'text-blue-500' : 'text-gray-500'
+                                      }`} />
+                                    )}
+                                  </div>
+                                  <p className={`text-xs mt-2 text-center ${
+                                    getProcessStage(result.status) === 2 
+                                      ? 'text-blue-400 font-semibold' 
+                                      : getProcessStage(result.status) > 2
+                                      ? 'text-emerald-400 font-semibold'
+                                      : 'text-gray-500'
+                                  }`}>
+                                    Proses<br/>Assembling
+                                  </p>
+                                </div>
+
+                                {/* Connector Line 2-3 */}
+                                <div className={`flex-1 h-0.5 mx-2 ${
+                                  getProcessStage(result.status) >= 3 ? 'bg-emerald-500' : 'bg-gray-600'
+                                }`}></div>
+
+                                {/* Stage 3: Proses QC */}
+                                <div className="flex flex-col items-center flex-1">
+                                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                                    getProcessStage(result.status) >= 3 
+                                      ? getProcessStage(result.status) === 3
+                                        ? 'bg-purple-500/20 border-2 border-purple-500 animate-pulse'
+                                        : 'bg-emerald-500/20 border-2 border-emerald-500'
+                                      : 'bg-gray-700/20 border-2 border-gray-600'
+                                  }`}>
+                                    {getProcessStage(result.status) > 3 ? (
+                                      <CheckCircle className="w-6 h-6 text-emerald-500" />
+                                    ) : (
+                                      <AlertCircle className={`w-6 h-6 ${
+                                        getProcessStage(result.status) === 3 ? 'text-purple-500' : 'text-gray-500'
+                                      }`} />
+                                    )}
+                                  </div>
+                                  <p className={`text-xs mt-2 text-center ${
+                                    getProcessStage(result.status) === 3 
+                                      ? 'text-purple-400 font-semibold' 
+                                      : getProcessStage(result.status) > 3
+                                      ? 'text-emerald-400 font-semibold'
+                                      : 'text-gray-500'
+                                  }`}>
+                                    Proses<br/>QC
+                                  </p>
+                                </div>
+
+
+                              </div>
+                            </div>
+
+                            {/* Details Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-700">
+                              
+                              {/* Start Time */}
+                              {result.first_start_actual && (
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center">
+                                    <Clock className="w-5 h-5 text-amber-400" />
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-400">Mulai</p>
+                                    <p className="text-white font-semibold text-sm">
+                                      {formatDateTime(result.first_start_actual)}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Finish Time */}
+                              {result.last_start_actual && (
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-400">Selesai</p>
+                                    <p className="text-white font-semibold text-sm">
+                                      {formatDateTime(result.last_start_actual)}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+
+                            </div>
+
+                            {/* Status History Timeline */}
+                            {mergedHistoryEvents.length > 0 && (
+                              <div className="pt-6 border-t border-gray-700">
+                                <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
+                                  <Clock className="w-5 h-5 text-blue-400" />
+                                  Riwayat Status
+                                </h4>
+                                
+                                <div className="space-y-3">
+                                  {mergedHistoryEvents.map((event, eventIdx) => {
+                                    const eventStatusColor = getStatusColor(event.status);
+                                    const materialToggleKey = `${result.id_perproduct}-${eventIdx}-${event.no_kpm || 'nokpm'}`;
+                                    const isMaterialExpanded = Boolean(expandedMaterialRows[materialToggleKey]);
+                                    const hasMaterialDetails =
+                                      (event.source_table === 'material_shipped' || event.source_table === 'material_stock_reserved') &&
+                                      Array.isArray(event.material_details) &&
+                                      event.material_details.length > 0;
+                                    
+                                    return (
+                                      <div 
+                                        key={`${result.id_perproduct}-${eventIdx}-${event.source_table || 'event'}-${String(event.start_actual)}`} 
+                                        className="flex items-start gap-4 p-3 bg-gray-900/40 rounded-lg border border-gray-700/50 hover:border-gray-600/50 transition-all"
+                                      >
+                                        {/* Date Column */}
+                                        <div className="w-24 text-right space-y-0.5">
+                                          <p className="text-xs text-gray-400">
+                                            {formatDayName(event.start_actual)}
+                                          </p>
+                                          <p className="text-xs text-gray-400">
+                                            {formatDateOnly(event.start_actual)}
+                                          </p>
+                                          <p className="text-sm text-white font-semibold">
+                                            {formatTimeOnly(event.start_actual)}
+                                          </p>
+                                        </div>
+
+                                        {/* Timeline Dot */}
+                                        <div className="flex flex-col items-center pt-1">
+                                          <div className={`w-3 h-3 rounded-full ${eventStatusColor.bg}`}></div>
+                                          {eventIdx < mergedHistoryEvents.length - 1 && (
+                                            <div className="w-0.5 h-10 bg-gray-700 mt-1"></div>
+                                          )}
+                                        </div>
+                                        
+                                        {/* Event Details */}
+                                        <div className="flex-1 space-y-1">
+                                          <Badge className={`${eventStatusColor.bg} ${eventStatusColor.text} border-0 text-xs`}>
+                                            {event.status}
+                                          </Badge>
+                                          <p className="text-xs text-gray-400">
+                                            {event.line?.trim() || '-'}
+                                          </p>
+                                          <p className="text-sm text-gray-300">
+                                             {getStatusMessage(event)}
+                                          </p>
+
+                                          {hasMaterialDetails && canViewMaterialDetails && (
+                                            <div className="pt-2 space-y-3">
+                                              <button
+                                                type="button"
+                                                onClick={() => toggleMaterialRows(materialToggleKey)}
+                                                className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 transition-colors"
+                                              >
+                                                <ShoppingCart className="w-3.5 h-3.5" />
+                                                Detail material
+                                                {isMaterialExpanded ? (
+                                                  <ChevronUp className="w-3.5 h-3.5" />
+                                                ) : (
+                                                  <ChevronDown className="w-3.5 h-3.5" />
+                                                )}
+                                              </button>
+
+                                              {isMaterialExpanded && (
+                                                <div className="overflow-x-auto rounded-lg border border-gray-700/70">
+                                                  <table className="min-w-full text-xs">
+                                                    <thead className="bg-gray-900/80 text-gray-300">
+                                                      <tr>
+                                                        <th className="px-3 py-2 text-left font-semibold">No.</th>
+                                                        <th className="px-3 py-2 text-left font-semibold">Komat</th>
+                                                        <th className="px-3 py-2 text-left font-semibold">Spesifikasi</th>
+                                                        <th className="px-3 py-2 text-left font-semibold">Qty Diminta</th>
+                                                        <th className="px-3 py-2 text-left font-semibold">Qty Diserahkan</th>
+                                                      </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                      {event.material_details?.map((material, materialIdx) => (
+                                                        <tr key={`${material.no_kpm || 'kpm'}-${material.item || 0}-${materialIdx}`} className="border-t border-gray-800 bg-gray-900/40 text-gray-200">
+                                                          <td className="px-3 py-2 whitespace-nowrap">{material.item ?? '-'}</td>
+                                                          <td className="px-3 py-2 whitespace-nowrap">{material.komat || '-'}</td>
+                                                          <td className="px-3 py-2">{material.spesifikasi || '-'}</td>
+                                                          <td className="px-3 py-2 whitespace-nowrap">{material.qty ?? '-'}</td>
+                                                          <td className="px-3 py-2 whitespace-nowrap">{material.qty_ready ?? '-'}</td>
+                                                        </tr>
+                                                      ))}
+                                                    </tbody>
+                                                  </table>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Buat Laporan Button */}
+                            <div className="pt-4 mt-4 border-t border-gray-700 space-y-3">
+                              <button
+                                onClick={() => openReportModal(result.id_perproduct || null, result.product_name || null)}
+                                className="w-full flex items-center justify-center gap-2 text-sm px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 transition-colors text-white font-medium"
+                              >
+                                <FileText className="w-4 h-4" />
+                                Buat Laporan
+                              </button>
+
+                              <button
+                                onClick={handleLogout}
+                                className="w-full flex items-center justify-center gap-2 text-sm px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 transition-colors text-white font-medium"
+                              >
+                                <LogOut className="w-4 h-4" />
+                                Logout
+                              </button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!isLoading && results.length === 0 && !error && trackingIds && (
+              <Card className="bg-gray-800/50 border border-gray-700/60">
+                <CardContent className="p-12 text-center">
+                  <Package className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                  <p className="text-gray-400 text-lg">
+                    Masukkan ID Produk dan klik "Lacak Produk" untuk melihat status
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* Report Modal */}
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={closeReportModal}
+        serialNumber={selectedResultForReport?.serialNumber || null}
+        productName={selectedResultForReport?.productName || null}
+      />
     </div>
-    </ModernSidebar>
   );
 }
 
@@ -1067,15 +1503,17 @@ export default function ProductTrackingPage() {
   return (
     <Suspense
       fallback={
-        <ModernSidebar>
-          <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6 sm:p-8">
-            <div className="max-w-6xl mx-auto">
-              <Card className="bg-gray-800/50 border border-gray-700/60 backdrop-blur-sm">
-                <CardContent className="p-6 text-gray-300">Memuat halaman pelacakan produk...</CardContent>
-              </Card>
+        <div>
+          <ModernSidebar>
+            <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6 sm:p-8">
+              <div className="max-w-6xl mx-auto">
+                <Card className="bg-gray-800/50 border border-gray-700/60 backdrop-blur-sm">
+                  <CardContent className="p-6 text-gray-300">Memuat halaman pelacakan produk...</CardContent>
+                </Card>
+              </div>
             </div>
-          </div>
-        </ModernSidebar>
+          </ModernSidebar>
+        </div>
       }
     >
       <ProductTrackingContent />

@@ -8,7 +8,7 @@ import {
   getMaterialByProduct,
 } from "@/lib/queries/master_material";
 import { getRecentNoKPM } from "@/lib/queries/stok_material";
-import MaterialFilters from "./material-filters";
+import MaterialFilters from "@/components/material/MaterialFilters";
 import MaterialTable from "./material-table";
 
 interface MaterialPageProps {
@@ -69,9 +69,9 @@ export default async function MaterialPage({ searchParams }: MaterialPageProps) 
   ]);
 
   const today = new Date();
-  const currentMonth = today.getMonth() + 1; // 0-indexed, so add 1
+  const currentMonthNumber = today.getMonth() + 1; // 0-indexed, so add 1
   const currentYear = today.getFullYear();
-  const romanMonth = monthToRoman(currentMonth);
+  const romanMonth = monthToRoman(currentMonthNumber);
 
   const noKpmOptions = Array.from({ length: 9 }, (_, idx) =>
     `${latestNoKpm + idx + 1}/PPO/KPM/${romanMonth}/${currentYear}`

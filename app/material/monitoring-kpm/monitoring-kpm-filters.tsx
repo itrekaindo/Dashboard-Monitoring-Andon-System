@@ -6,6 +6,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 type MonitoringKpmFiltersProps = {
   stOptions: string[];
   proyekOptions: string[];
+  availableMonths: string[];
+  currentMonth: string;
+  defaultMonth: string;
   currentSt: string;
   currentPostDate: string;
   currentSearch: string;
@@ -17,6 +20,9 @@ type MonitoringKpmFiltersProps = {
 export default function MonitoringKpmFilters({
   stOptions,
   proyekOptions,
+  availableMonths,
+  currentMonth,
+  defaultMonth,
   currentSt,
   currentPostDate,
   currentSearch,
@@ -32,16 +38,37 @@ export default function MonitoringKpmFilters({
   const [postDate, setPostDate] = useState(currentPostDate);
   const [search, setSearch] = useState(currentSearch);
   const [proyek, setProyek] = useState(currentProyek);
+  const [month, setMonth] = useState(currentMonth);
 
   useEffect(() => {
     setSt(currentSt);
     setPostDate(currentPostDate);
     setSearch(currentSearch);
     setProyek(currentProyek);
-  }, [currentSt, currentPostDate, currentSearch, currentProyek]);
+    setMonth(currentMonth);
+  }, [currentSt, currentPostDate, currentSearch, currentProyek, currentMonth]);
+
+  const monthOptions = useMemo(() => {
+    if (!availableMonths || availableMonths.length === 0) return [];
+
+    const formatter = new Intl.DateTimeFormat('id-ID', {
+      month: 'long',
+      year: 'numeric',
+    });
+
+    return availableMonths.map((monthValue) => {
+      const [year, month] = monthValue.split('-').map(Number);
+      const date = new Date(year, month - 1, 1);
+      return {
+        value: monthValue,
+        label: formatter.format(date),
+      };
+    });
+  }, [availableMonths]);
 
   const nextQueryString = useMemo(() => {
     const params = new URLSearchParams();
+    if (month) params.set('month', month);
     if (st) params.set("st", st);
     if (postDate) params.set("post_date", postDate);
     if (search) params.set("search", search);
@@ -49,7 +76,7 @@ export default function MonitoringKpmFilters({
     if (sortBy) params.set("sortBy", sortBy);
     if (sortDir) params.set("sortDir", sortDir);
     return params.toString();
-  }, [st, postDate, search, proyek, sortBy, sortDir]);
+  }, [month, st, postDate, search, proyek, sortBy, sortDir]);
 
   useEffect(() => {
     const currentQueryString = searchParams.toString();
@@ -64,6 +91,7 @@ export default function MonitoringKpmFilters({
   }, [nextQueryString, pathname, router, searchParams]);
 
   const handleReset = () => {
+    setMonth(defaultMonth);
     setSt("");
     setPostDate("");
     setSearch("");
@@ -71,7 +99,22 @@ export default function MonitoringKpmFilters({
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+      <div className="space-y-1">
+        <label className="text-xs text-gray-400">Bulan</label>
+        <select
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+          className="w-full rounded-md bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-white"
+        >
+          {monthOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="space-y-1">
         <label className="text-xs text-gray-400">ST</label>
         <select
@@ -125,7 +168,7 @@ export default function MonitoringKpmFilters({
         </select>
       </div>
 
-      <div className="xl:col-span-4 flex gap-2">
+      <div className="xl:col-span-5 flex gap-2">
         <button
           type="button"
           onClick={handleReset}

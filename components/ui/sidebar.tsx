@@ -61,9 +61,9 @@ const MenuItemComponent = ({
   onNavigate,
   toggleSubmenu 
 }: MenuItemProps) => {
-  const isActive = activeMenu === item.id || activeMenu.startsWith(`${item.id}-`);
-  const isExpanded = expandedMenus.includes(item.id) || activeMenu.startsWith(`${item.id}-`);
   const hasSubmenu = item.submenu && item.submenu.length > 0;
+  const isActive = activeMenu === item.id || (hasSubmenu && activeMenu.startsWith(`${item.id}-`));
+  const isExpanded = expandedMenus.includes(item.id) || (hasSubmenu && activeMenu.startsWith(`${item.id}-`));
 
   const handleClick = () => {
     if (hasSubmenu) {
@@ -243,7 +243,9 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
     if (pathname.startsWith('/schedule/lantai-1')) return 'schedule-lantai1';
     if (pathname.startsWith('/schedule/lantai-2')) return 'schedule-lantai2';
     if (pathname.startsWith('/schedule')) return 'schedule-lantai3';
-    if (pathname === '/product' || pathname.startsWith('/product/')) return 'product';
+    if (pathname.startsWith('/product/lantai-1')) return 'product-pengerjaan-lantai1';
+    if (pathname.startsWith('/product/lantai-2')) return 'product-pengerjaan-lantai2';
+    if (pathname === '/product' || pathname.startsWith('/product/')) return 'product-pengerjaan-lantai3';
     if (pathname.startsWith('/product-tracking')) return 'product-tracking';
     if (pathname.startsWith('/production-progress/lantai-1')) return 'production-lantai1';
     if (pathname.startsWith('/production-progress/lantai-2')) return 'production-lantai2';
@@ -342,19 +344,33 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
         }
       ]
     },
-    /*
+    
     {
       id: 'product',
       label: 'Product',
       icon: Package,
-      path: '/product'
-    },
-    */
-    {
-      id: 'product-tracking',
-      label: 'Product Tracking',
-      icon: Search,
-      path: '/product-tracking'
+      submenu: [
+        {
+          id: 'product-tracking',
+          label: 'Product Tracking',
+          path: '/product-tracking'
+        },
+        {
+          id: 'product-pengerjaan-lantai3',
+          label: 'Pengerjaan Lantai 3',
+          path: '/product'
+        },
+        {
+          id: 'product-pengerjaan-lantai2',
+          label: 'Pengerjaan Lantai 2',
+          path: '/product/lantai-2'
+        },
+        {
+          id: 'product-pengerjaan-lantai1',
+          label: 'Pengerjaan Lantai 1',
+          path: '/product/lantai-1'
+        }
+      ]
     },
     {
       id: 'production',

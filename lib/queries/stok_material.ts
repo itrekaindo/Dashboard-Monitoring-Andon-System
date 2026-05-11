@@ -73,9 +73,20 @@ export interface MonitoringKpmFilterOptions {
   proyekOptions: string[];
 }
 
+export interface MaterialOutLineChart {
+  tanggal: string | null;
+  baris_reservasi: number | null;
+  baris_disiapkan: number | null;
+  baris_out: number | null;
+  jumlah_reservasi: number | null;
+  jumlah_disiapkan: number | null;
+}
+
 interface RecentNoKPMRow {
   nomor_awal: number | null;
 }
+
+
 
 export async function getAllMaterials(): Promise<Material[]> {
   try {
@@ -292,6 +303,68 @@ export async function getStokMaterialTimeline(
     return rows as StokMaterialTimeline[];
   } catch (error) {
     console.error('Gagal mengambil timeline stok material:', error);
+    return [];
+  }
+}
+
+function isMonthValue(value: string) {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+}
+
+function getCurrentMonthValue() {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  return `${today.getFullYear()}-${month}`;
+}
+
+export async function getMaterialOutLineChart(
+  month?: string,
+): Promise<MaterialOutLineChart[]> {
+  try {
+    const selectedMonth = isMonthValue((month ?? '').trim())
+      ? (month ?? '').trim()
+      : getCurrentMonthValue();
+
+    const result = await db.execute(sql`
+      SELECT 
+        DATE(post_date) AS tanggal,
+        COUNT(*) AS baris_reservasi,
+        COUNT(tgl_ready) AS baris_disiapkan,
+        COUNT(out_date) AS baris_out,
+        SUM(COALESCE(qty, 0)) AS jumlah_reservasi,
+        SUM(COALESCE(qty_ready, 0)) AS jumlah_disiapkan
+      FROM stok_material
+      WHERE post_date IS NOT NULL
+        AND DATE_FORMAT(post_date, '%Y-%m') = ${selectedMonth}
+      GROUP BY DATE(post_date)
+      ORDER BY tanggal ASC;
+    `);
+
+    const rows = Array.isArray(result[0]) ? result[0] : result;
+    return rows as MaterialOutLineChart[];
+  } catch (error) {
+    console.error('Gagal mengambil line chart stok material:', error);
+    return [];
+  }
+}
+
+export const getMateriallineChart = getMaterialOutLineChart;
+
+export async function getAvailableMonths(): Promise<string[]> {
+  try {
+    const result = await db.execute(sql`
+      SELECT DISTINCT DATE_FORMAT(post_date, '%Y-%m') AS bulan
+      FROM stok_material
+      WHERE post_date IS NOT NULL
+      ORDER BY bulan DESC
+    `);
+
+    const rows = Array.isArray(result[0]) ? result[0] : result;
+    return (rows as Array<{ bulan: string | null }>)
+      .filter((row) => row.bulan !== null)
+      .map((row) => row.bulan as string);
+  } catch (error) {
+    console.error('Gagal mengambil daftar bulan tersedia:', error);
     return [];
   }
 }

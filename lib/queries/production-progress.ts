@@ -40,6 +40,31 @@ export interface ProductionProgress {
   ideal_duration_time?: string | null;
 }
 
+export interface ProductCardbyTrainset {
+  id_product: string | null;
+  product_name: string | null;
+  tanggal_mulai: Date | string | null;
+  tanggal_selesai: Date | string | null;
+  jumlah_tiapts: number | null;
+  trainset: string | number | null;
+  start_actual: Date | string | null;
+  finish_actual: Date | string | null;
+  jumlah_selesai: number | null;
+  percentage: number | null;
+  deviasi_hari: number | null;
+}
+
+export interface ProductDetailByTrainset {
+  id_perproduct: string | null;
+  product_name: string | null;
+  id_product: string | null;
+  operator_actual_name: string | null;
+  start_actual: Date | string | null;
+  finish_actual: Date | string | null;
+  durasi_jam: number | string | null;
+  status: string | null;
+}
+
 export interface ProductionStats {
   total_processes: number;
   completed: number;
@@ -523,6 +548,16 @@ export interface OperatorStats {
   total_selesai_hari_ini: number;
 }
 
+export interface ProductStatsByTrainset {
+  product_name: string | null;
+  trainset: string | null;
+  jumlah_tunggu_qc: number | null;
+  jumlah_kurang_komponen: number | null;
+  jumlah_tiapts: number | null;
+  presentase_selesai: number | null;
+  presentase_kekurangan_komponen: number | null;
+}
+
 export interface AbnormalProgress {
   operator_actual_rfid: number | null;
   operator_actual_name: string | null;
@@ -533,6 +568,8 @@ export interface AbnormalProgress {
   note_qc: string | null;
   kategori?: string | null;
 }
+
+
 
 // Get up to 3 latest active processes per workstation (finish_actual is null)
 export async function getRecentProgress(line?: string): Promise<CurrentWorkstationProgress[]> {
@@ -938,7 +975,7 @@ export async function searchProductionProgress(searchTerm: string): Promise<Prod
 export async function logProductionProgressSample(limit: number = 10): Promise<ProductionProgress[]> {
   try {
     const data = await getRecentProductionProgressLantai3(limit);
-    console.log(`[production_progress] showing ${data.length} rows (limit ${limit}):`, data);
+    //console.log(`[production_progress] showing ${data.length} rows (limit ${limit}):`, data);
     return data;
   } catch (error) {
     console.error("Failed to log production progress sample:", error);
@@ -1174,6 +1211,322 @@ ORDER BY
     return rows;
   } catch (error) {
     console.error("Failed to fetch product schedule:", error);
+    return [];
+  }
+}
+
+
+export async function getProductStatsL3ByTrainset(): Promise<ProductStatsByTrainset[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT 
+    j.product_name,
+    pp.trainset,
+
+    COUNT(DISTINCT CASE 
+        WHEN pp.status = 'Tunggu QC' 
+        THEN pp.id_perproduct 
+    END) AS jumlah_tunggu_qc,
+
+    COUNT(DISTINCT CASE 
+        WHEN pp.status = 'Kurang Komponen' 
+        THEN pp.id_perproduct 
+    END) AS jumlah_kurang_komponen,
+
+    j.jumlah_tiapts,
+
+    ROUND(
+        COUNT(DISTINCT CASE 
+            WHEN pp.status = 'Tunggu QC' 
+            THEN pp.id_perproduct 
+        END) * 100.0 / j.jumlah_tiapts
+    ) AS presentase_selesai,
+
+    ROUND(
+        COUNT(DISTINCT CASE 
+            WHEN pp.status = 'Kurang Komponen' 
+            THEN pp.id_perproduct 
+        END) * 100.0 / j.jumlah_tiapts
+    ) AS presentase_kekurangan_komponen
+
+FROM production_progress pp
+JOIN jadwal j 
+    ON pp.id_product = j.id_product 
+   AND pp.trainset = j.trainset
+
+WHERE j.line = 'Lantai 3'
+
+GROUP BY j.product_name, pp.trainset, j.jumlah_tiapts;
+    `);
+    
+    const rows = extractRows(result);
+    return rows as ProductStatsByTrainset[];
+  } catch (error) {
+    console.error("Failed to fetch production progress:", error);
+    return [];
+  }
+}
+
+export async function getProductCardbyTrainset(trainset: number): Promise<ProductCardbyTrainset[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT 
+    j.id_product,
+    j.product_name,
+    j.tanggal_mulai,
+    j.tanggal_selesai,
+    j.jumlah_tiapts,
+    j.trainset,
+
+    MIN(pp.start_actual) AS start_actual,
+    MAX(pp.start_actual) AS finish_actual,
+
+    COUNT(DISTINCT CASE 
+        WHEN pp.status = 'Tunggu QC' 
+        THEN pp.id_perproduct 
+    END) AS jumlah_selesai,
+
+    ROUND(
+        COUNT(DISTINCT CASE 
+            WHEN pp.status = 'Tunggu QC' 
+            THEN pp.id_perproduct 
+        END) / j.jumlah_tiapts * 100
+    , 0) AS percentage,
+
+    /* DEViasi (hari) */
+    DATEDIFF(
+        MAX(pp.start_actual), 
+        j.tanggal_selesai
+    ) AS deviasi_hari
+
+FROM jadwal j
+LEFT JOIN production_progress pp
+    ON j.id_product = pp.id_product
+    AND pp.trainset = ${trainset}
+
+WHERE j.line = 'Lantai 3'
+AND j.trainset = ${trainset}
+
+GROUP BY 
+    j.id_product,
+    j.product_name,
+    j.tanggal_mulai,
+    j.tanggal_selesai,
+    j.jumlah_tiapts,
+    j.trainset
+
+ORDER BY j.product_name ASC;
+      
+          `);
+    
+    const rows = extractRows(result);
+    return rows as ProductCardbyTrainset[];
+  } catch (error) {
+    console.error("Failed to fetch production progress:", error);
+    return [];
+  }
+}
+
+export async function getProductCardbyTrainsetL2(trainset: number | string): Promise<ProductCardbyTrainset[]> {
+  try {
+    const trainsetNumber = typeof trainset === 'string' ? Number(trainset) : trainset;
+    const result = await db.execute(sql`
+SELECT 
+    j.id_product,
+    j.product_name,
+    j.tanggal_mulai,
+    j.tanggal_selesai,
+    j.jumlah_tiapts,
+    j.trainset,
+
+    MIN(pp.start_actual) AS start_actual,
+    MAX(pp.start_actual) AS finish_actual,
+
+    COUNT(DISTINCT CASE 
+        WHEN pp.status = 'Selesai' 
+        THEN pp.id_perproduct 
+    END) AS jumlah_selesai,
+
+    ROUND(
+        COUNT(DISTINCT CASE 
+            WHEN pp.status = 'Selesai' 
+            THEN pp.id_perproduct 
+        END) / j.jumlah_tiapts * 100
+    , 0) AS percentage
+
+FROM jadwal j
+LEFT JOIN production_progress_protrack pp
+    ON j.id_product = pp.id_product
+    AND pp.trainset = ${trainsetNumber}
+
+WHERE j.line = 'Lantai 2'
+AND j.trainset = ${trainsetNumber}
+
+GROUP BY 
+    j.id_product,
+    j.product_name,
+    j.tanggal_mulai,
+    j.tanggal_selesai,
+    j.jumlah_tiapts,
+    j.trainset
+
+ORDER BY j.product_name ASC;
+      
+          `);
+    
+    const rows = extractRows(result);
+    return rows as ProductCardbyTrainset[];
+  } catch (error) {
+    console.error("Failed to fetch production progress:", error);
+    return [];
+  }
+}
+
+export async function getProductDetailbyTrainsetL3(trainset: number): Promise<ProductCardbyTrainset[]> {
+  try {
+    const result = await db.execute(sql`
+SELECT 
+    p1.id_perproduct,
+    p1.product_name,
+    p1.id_product,
+    p1.operator_actual_name,
+
+    MIN(p1.start_actual) AS start_actual,
+    MAX(p1.start_actual) AS finish_actual,
+
+    /* Durasi dalam jam */
+    SUM(
+        CASE 
+            WHEN p1.status = 'On Progress' 
+                 AND p2.start_actual IS NOT NULL
+            THEN TIMESTAMPDIFF(
+                MINUTE,
+                p1.start_actual,
+                p2.start_actual
+            )
+            ELSE 0
+        END
+    ) / 60 AS durasi_jam
+
+FROM production_progress p1
+
+LEFT JOIN production_progress p2
+    ON p1.id_perproduct = p2.id_perproduct
+    AND p2.start_actual = (
+        SELECT MIN(p3.start_actual)
+        FROM production_progress p3
+        WHERE p3.id_perproduct = p1.id_perproduct
+        AND p3.start_actual > p1.start_actual
+    )
+
+WHERE p1.trainset = ${trainset}
+
+GROUP BY 
+    p1.id_perproduct,
+    p1.product_name,
+    p1.id_product,
+    p1.operator_actual_name
+
+ORDER BY p1.id_perproduct;
+            
+          `);
+    
+    const rows = extractRows(result);
+    return rows as ProductCardbyTrainset[];
+  } catch (error) {
+    console.error("Failed to fetch production progress:", error);
+    return [];
+  }
+}
+
+export async function getProductDetailByProductL3(
+  trainset: number,
+  idProduct: string,
+  productName?: string
+): Promise<ProductDetailByTrainset[]> {
+  try {
+    const hasProductName = Boolean(productName && productName.trim());
+    const result = await db.execute(sql`
+WITH filtered AS (
+  SELECT *
+  FROM production_progress
+  WHERE trainset = ${trainset}
+    AND (
+    id_product = ${idProduct}
+    ${hasProductName ? sql`OR product_name = ${productName!.trim()}` : sql``}
+    )
+),
+summary AS (
+  SELECT
+    id_perproduct,
+    MIN(start_actual) AS start_actual,
+    COALESCE(MAX(finish_actual), MAX(start_actual)) AS finish_actual
+  FROM filtered
+  GROUP BY id_perproduct
+),
+duration AS (
+  SELECT
+    p1.id_perproduct,
+    ROUND(
+      SUM(
+        CASE
+          WHEN p1.status = 'On Progress'
+             AND p2.start_actual IS NOT NULL
+          THEN TIMESTAMPDIFF(
+            MINUTE,
+            p1.start_actual,
+            p2.start_actual
+          )
+          ELSE 0
+        END
+      ) / 60,
+    2) AS durasi_jam
+  FROM filtered p1
+  LEFT JOIN filtered p2
+    ON p1.id_perproduct = p2.id_perproduct
+    AND p2.start_actual = (
+      SELECT MIN(p3.start_actual)
+      FROM filtered p3
+      WHERE p3.id_perproduct = p1.id_perproduct
+      AND p3.start_actual > p1.start_actual
+    )
+  GROUP BY p1.id_perproduct
+),
+latest AS (
+  SELECT
+    id_perproduct,
+    product_name,
+    id_product,
+    operator_actual_name,
+    status,
+    ROW_NUMBER() OVER (
+      PARTITION BY id_perproduct
+      ORDER BY start_actual DESC, id_process DESC
+    ) AS rn
+  FROM filtered
+)
+SELECT
+  s.id_perproduct,
+  l.product_name,
+  l.id_product,
+  l.operator_actual_name,
+  s.start_actual,
+  s.finish_actual,
+  d.durasi_jam,
+  l.status
+FROM summary s
+JOIN duration d
+  ON s.id_perproduct = d.id_perproduct
+JOIN latest l
+  ON s.id_perproduct = l.id_perproduct
+   AND l.rn = 1
+ORDER BY s.id_perproduct;
+          `);
+
+    const rows = extractRows(result);
+    return rows as ProductDetailByTrainset[];
+  } catch (error) {
+    console.error('Failed to fetch product detail by product:', error);
     return [];
   }
 }

@@ -439,7 +439,7 @@ export default function OperatorClient({
       const response = await fetch('/api/process-bar');
       if (!response.ok) throw new Error('Gagal mengambil data progress bar');
       const result = await response.json();
-      console.log('Process Bar Data:', result);
+      //console.log('Process Bar Data:', result);
       if (isMountedRef.current && result.success) {
         setProcessBarData(result.data || []);
       } else if (isMountedRef.current && result.data) {

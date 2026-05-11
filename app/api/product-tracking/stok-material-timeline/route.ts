@@ -112,10 +112,10 @@ export async function GET(request: Request) {
       );
     }
 
-    console.log(`🔍 API Request: no_kpm=${no_kpm}`);
+    //console.log(`🔍 API Request: no_kpm=${no_kpm}`);
     const rows = await getStokMaterialTimeline(no_kpm);
     const timeline = buildTimelineEvents(rows);
-    console.log(`📤 API Response: ${timeline.length} records`);
+    //console.log(`📤 API Response: ${timeline.length} records`);
 
     return NextResponse.json({
       timeline,

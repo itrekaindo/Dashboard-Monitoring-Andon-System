@@ -396,7 +396,7 @@ export default function JadwalClient({
         const response = await fetch(`/api/process-bar?line=${encodeURIComponent(selectedLine)}`);
         if (!response.ok) throw new Error("Gagal mengambil data progress bar");
         const result = await response.json();
-        console.log("Process Bar Data:", result);
+        //console.log("Process Bar Data:", result);
         if (isMounted && result.success) {
           setProcessBarData(result.data || []);
         } else if (isMounted && result.data) {
@@ -458,13 +458,26 @@ export default function JadwalClient({
   const filteredRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     let filtered = rows.filter((row) => {
-      // Filter by month-year
+      // Filter by month-year with overlap detection for cross-month schedules
       if (monthYearFilter !== "all") {
-        if (!row.tanggal_selesai) return false;
-        const date = new Date(row.tanggal_selesai);
-        if (Number.isNaN(date.valueOf())) return false;
-        const rowMonthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        if (rowMonthYear !== monthYearFilter) return false;
+        if (!row.tanggal_mulai || !row.tanggal_selesai) return false;
+        const [year, month] = monthYearFilter.split('-').map(Number);
+        
+        // Define range of selected month
+        const filterStart = new Date(year, month - 1, 1);
+        filterStart.setHours(0, 0, 0, 0);
+        const filterEnd = new Date(year, month, 0);
+        filterEnd.setHours(23, 59, 59, 999);
+        
+        // Get schedule date range
+        const scheduleStart = new Date(row.tanggal_mulai);
+        const scheduleEnd = new Date(row.tanggal_selesai);
+        
+        if (Number.isNaN(scheduleStart.valueOf()) || Number.isNaN(scheduleEnd.valueOf())) return false;
+        
+        // Check if schedule overlaps with selected month range
+        const overlaps = scheduleStart <= filterEnd && scheduleEnd >= filterStart;
+        if (!overlaps) return false;
       }
       // Filter by search query
       if (!query) return true;
@@ -948,9 +961,16 @@ export default function JadwalClient({
                         
                         if (Number.isNaN(startDate.valueOf()) || Number.isNaN(endDate.valueOf())) return null;
                         
-                        // Calculate position and width
-                        const startOffset = Math.max(0, (startDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
-                        const duration = Math.max(1, ((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+                        // Calculate position and width with clamping to visible range for cross-month schedules
+                        // When month filter is active, schedule may span multiple months; clamp to visible range
+                        const clampedStart = startDate < minDate ? minDate : startDate;
+                        const clampedEnd = endDate > maxDate ? maxDate : endDate;
+                        
+                        // Only render bar if it overlaps with visible range
+                        if (clampedStart > maxDate || clampedEnd < minDate) return null;
+                        
+                        const startOffset = (clampedStart.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24);
+                        const duration = Math.max(1, ((clampedEnd.getTime() - clampedStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
                         const leftPercent = (startOffset / totalDays) * 100;
                         const widthPercent = (duration / totalDays) * 100;
                         

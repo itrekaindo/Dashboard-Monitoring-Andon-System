@@ -360,7 +360,20 @@ export default function TimelineContent({
     const rows = wsRowsByWs.get(workstation) || [];
     const estDuration = formatEst(durations.find((d) => d.workstation === workstation)?.actual_duration || null);
 
-    return rows.slice(0, 3).map((row) => {
+    // Deduplicate by id_perproduct (current_id_perproduct) to avoid showing the same product multiple times on nodes
+    const uniqueRows: typeof rows = [];
+    const seen = new Set<string>();
+    for (const r of rows) {
+      const id = String((r as any).current_id_perproduct ?? (r as any).current_id_product ?? '');
+      if (id) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+      }
+      uniqueRows.push(r);
+      if (uniqueRows.length >= 3) break;
+    }
+
+    return uniqueRows.map((row) => {
       const status = row.current_status || '';
       const variant = statusVariant(status);
       const showElapsed = (
@@ -747,9 +760,11 @@ export default function TimelineContent({
                     // Check if status is "Tunggu" (waiting)
                     const isWaiting = card.status?.toLowerCase().includes('tunggu');
                     const statusColor = getStatusColor(card.status);
-
-                    return (
-                      <Card key={`progress-${card.id_product}-${idx}`} className="bg-slate-900 border border-slate-700 hover:border-amber-500 transition-colors">
+                    const trackingHref = card.id_perproduct
+                      ? `https://sinergi.ptrekaindo.co.id/product-tracking?q=${encodeURIComponent(card.id_perproduct)}`
+                      : null;
+                    const cardBody = (
+                      <Card className="bg-slate-900 border border-slate-700 hover:border-amber-500 transition-colors">
                         <CardContent className="px-3 py-1">
                           <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
                             <div className="space-y-0.5 min-w-0 leading-tight">
@@ -782,6 +797,22 @@ export default function TimelineContent({
                         </CardContent>
                       </Card>
                     );
+
+                    return (
+                      trackingHref ? (
+                        <a
+                          key={`progress-${card.id_product}-${idx}`}
+                          href={trackingHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block"
+                        >
+                          {cardBody}
+                        </a>
+                      ) : (
+                        <div key={`progress-${card.id_product}-${idx}`}>{cardBody}</div>
+                      )
+                    );
                   })}
               </div>
             </div>
@@ -801,8 +832,11 @@ export default function TimelineContent({
                 {cards
                   .filter(card => card.is_completed === 1 && card.status !== 'Finish Good')
                   .map((card, qcIdx) => {
-                    return (
-                      <Card key={`qc-${card.id_product}-${qcIdx}`} className="bg-slate-900 border border-slate-700 hover:border-blue-500 transition-colors">
+                    const trackingHref = card.id_perproduct
+                      ? `https://sinergi.ptrekaindo.co.id/product-tracking?q=${encodeURIComponent(card.id_perproduct)}`
+                      : null;
+                    const cardBody = (
+                      <Card className="bg-slate-900 border border-slate-700 hover:border-blue-500 transition-colors">
                         <CardContent className="px-3 py-1">
                           <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
                             <div className="space-y-0.5 min-w-0 leading-tight">
@@ -842,6 +876,22 @@ export default function TimelineContent({
                         </CardContent>
                       </Card>
                     );
+
+                    return (
+                      trackingHref ? (
+                        <a
+                          key={`qc-${card.id_product}-${qcIdx}`}
+                          href={trackingHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block"
+                        >
+                          {cardBody}
+                        </a>
+                      ) : (
+                        <div key={`qc-${card.id_product}-${qcIdx}`}>{cardBody}</div>
+                      )
+                    );
                   })}
               </div>
             </div>
@@ -861,8 +911,11 @@ export default function TimelineContent({
                 {cards
                   .filter(card => card.status === 'Finish Good')
                   .map((card, fgIdx) => {
-                    return (
-                      <Card key={`finish-${card.id_product}-${fgIdx}`} className="bg-slate-900 border border-slate-700 hover:border-emerald-500 transition-colors">
+                    const trackingHref = card.id_perproduct
+                      ? `https://sinergi.ptrekaindo.co.id/product-tracking?q=${encodeURIComponent(card.id_perproduct)}`
+                      : null;
+                    const cardBody = (
+                      <Card className="bg-slate-900 border border-slate-700 hover:border-emerald-500 transition-colors">
                        <CardContent className="px-3 py-1">
                           <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
                           <div className="space-y-0.5 min-w-0 leading-tight">
@@ -889,6 +942,22 @@ export default function TimelineContent({
                           </div>
                         </CardContent>
                       </Card>
+                    );
+
+                    return (
+                      trackingHref ? (
+                        <a
+                          key={`finish-${card.id_product}-${fgIdx}`}
+                          href={trackingHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block"
+                        >
+                          {cardBody}
+                        </a>
+                      ) : (
+                        <div key={`finish-${card.id_product}-${fgIdx}`}>{cardBody}</div>
+                      )
                     );
                   })}
               </div>

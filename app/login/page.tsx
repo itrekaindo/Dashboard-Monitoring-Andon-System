@@ -1,6 +1,6 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { LogIn, User, Lock, AlertCircle } from "lucide-react";
 import Image from "next/image";
 
@@ -11,6 +11,15 @@ function LoginPageContent() {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Auto-fill NIP and password with "1111" when q parameter exists
+  useEffect(() => {
+    const qParam = searchParams.get("q");
+    if (qParam) {
+      setEmail("1111");
+      setPassword("1111");
+    }
+  }, [searchParams]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -7,7 +7,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const no_kpm = searchParams.get('no_kpm') || '';
 
-    console.log(`🔍 Test query for no_kpm: ${no_kpm}`);
+    //console.log(`🔍 Test query for no_kpm: ${no_kpm}`);
 
     // Get ALL records for this no_kpm
     const allResult = await db.execute(sql`
@@ -31,8 +31,8 @@ export async function GET(request: Request) {
 
     const allRows = Array.isArray(allResult[0]) ? allResult[0] : allResult;
     
-    console.log(`✅ Found ${allRows.length} TOTAL records:`);
-    console.log(JSON.stringify(allRows, null, 2));
+    //console.log(`✅ Found ${allRows.length} TOTAL records:`);
+    //console.log(JSON.stringify(allRows, null, 2));
 
     // Count records with dates filled
     const withPostDate = (allRows as any[]).filter(r => r.post_date).length;

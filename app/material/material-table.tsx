@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useReactToPrint } from 'react-to-print';
+import Swal from 'sweetalert2';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 import type { Material } from '@/lib/queries/master_material';
 
@@ -209,6 +210,41 @@ export default function MaterialTable({
 
   const showToast = (message: string, type: ToastType) => {
     setToast({ message, type });
+  };
+
+  const confirmSubmitRows = async () => {
+    const result = await Swal.fire({
+      icon: 'question',
+      title: 'Konfirmasi Cetak',
+      text: 'Seluruh material yang anda pilih akan diproses untuk reservasi. Apakah anda yakin untuk mencetak?',
+      showCancelButton: true,
+      confirmButtonText: 'Ya',
+      cancelButtonText: 'Tidak',
+      reverseButtons: true,
+      buttonsStyling: false,
+      allowOutsideClick: false,
+      allowEscapeKey: true,
+      background: '#111827',
+      color: '#f9fafb',
+      iconColor: '#10b981',
+      padding: '1.5rem',
+      customClass: {
+        popup: 'border border-gray-700 shadow-2xl',
+        title: 'text-white',
+        htmlContainer: 'text-gray-300',
+        confirmButton:
+          'inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-gray-900',
+        cancelButton:
+          'inline-flex items-center justify-center rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 focus:ring-offset-gray-900',
+        actions: 'gap-3',
+      },
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    await submitRows();
   };
 
   const submitRows = async () => {
@@ -424,10 +460,12 @@ export default function MaterialTable({
                       type="text"
                       name={`keterangan_${index}`}
                       value={keteranganMap[index] ?? ''}
-                      readOnly
-                      disabled
+                      disabled={!canManageMaterialDelivery}
+                      onChange={(e) => {
+                        setKeteranganMap((prev) => ({ ...prev, [index]: e.target.value }));
+                      }}
                       placeholder="Isi keterangan"
-                      className="w-full min-w-[180px] rounded-md bg-gray-900 border border-gray-700 px-2 py-1 text-sm text-white"
+                      className="w-full min-w-[180px] rounded-md bg-gray-900 border border-gray-700 px-2 py-1 text-sm text-white disabled:bg-gray-950 disabled:cursor-not-allowed"
                     />
                   </td>
                 </tr>
@@ -451,7 +489,7 @@ export default function MaterialTable({
         </p>
         <button
           type="button"
-          onClick={submitRows}
+          onClick={confirmSubmitRows}
           disabled={isSubmitDisabled}
           className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
         >

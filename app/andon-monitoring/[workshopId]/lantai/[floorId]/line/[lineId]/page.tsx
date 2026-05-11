@@ -139,7 +139,7 @@ export default async function LinePage({ params }: PageProps) {
   let productionData: ProductionProgress[] = [];
   try {
     const lineValue = `Lt ${floorId} Line ${lineId}`;
-    console.log("Looking for line:", lineValue);
+    //console.log("Looking for line:", lineValue);
     
     const result = await db.execute(sql`
       SELECT * FROM production_progress
@@ -147,7 +147,7 @@ export default async function LinePage({ params }: PageProps) {
     `);
     
     const rows = Array.isArray(result[0]) ? result[0] : result;
-    console.log("Rows found:", rows.length);
+    //console.log("Rows found:", rows.length);
     
     productionData = rows as ProductionProgress[];
   } catch (error) {
