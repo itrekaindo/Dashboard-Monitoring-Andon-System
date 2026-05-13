@@ -591,7 +591,13 @@ WITH RankedData AS (
     FROM ${progressTable} AS pp
     LEFT JOIN ideal_time AS t 
         ON pp.id_product = t.id_product 
-        AND pp.status = t.status
+        AND (
+          pp.status = t.status
+          OR (
+            pp.status LIKE 'Selesai Kit %'
+            AND t.status = REPLACE(pp.status, 'Selesai', 'Masuk')
+          )
+        )
     WHERE DATE(pp.start_actual) = CURDATE()
     AND pp.status NOT IN ('Tunggu Selesai', 'Gangguan Selesai')
     ${line ? sql`AND pp.line = ${line}` : sql``}

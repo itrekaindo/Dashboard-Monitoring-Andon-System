@@ -95,7 +95,7 @@ export async function GET(request: Request) {
         operator_actual_name,
         start_actual,
         finish_actual,
-        process_name,
+        sub_process AS process_name,
         line,
         workstation,
         note_qc,

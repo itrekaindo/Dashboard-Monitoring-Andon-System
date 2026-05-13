@@ -82,6 +82,45 @@ export interface MaterialOutLineChart {
   jumlah_disiapkan: number | null;
 }
 
+export interface PotensiKekuranganMaterialRow {
+  trainset: number | null;
+  tanggal_mulai: string | null;
+  line: string | null;
+  id_product: string | null;
+  product_name: string | null;
+  komat: string | null;
+  deskripsi: string | null;
+  spesifikasi: string | null;
+  satuan: string | null;
+  jumlah_diminta: number | null;
+  jumlah_tiapts: number | null;
+  kebutuhan_produk: number | null;
+  kebutuhan_incremental: number | null;
+  stok_warehouse: number | null;
+  stok_ppc: number | null;
+  total_stok: number | null;
+  sisa_stok: number | null;
+  jumlah_kekurangan: number | null;
+  status_material: 'Potensi Kurang' | 'Aman' | null;
+}
+
+export interface ProdukKekuranganMaterialChart {
+  tanggal: string | null;
+  baris_reservasi: number | null;
+  baris_disiapkan: number | null;
+  baris_out: number | null;
+  jumlah_reservasi: number | null;
+  jumlah_disiapkan: number | null;
+}
+
+export interface KekuranganMaterialChartRow {
+  trainset: number | null;
+  product_name: string | null;
+  jumlah_material_kurang: number | null;
+}
+
+
+
 interface RecentNoKPMRow {
   nomor_awal: number | null;
 }
@@ -365,6 +404,278 @@ export async function getAvailableMonths(): Promise<string[]> {
       .map((row) => row.bulan as string);
   } catch (error) {
     console.error('Gagal mengambil daftar bulan tersedia:', error);
+    return [];
+  }
+}
+
+export async function getPotensiKekuranganMaterial(): Promise<PotensiKekuranganMaterialRow[]> {
+  try {
+    const result = await db.execute(sql`
+WITH trainset_awal AS (
+    SELECT MAX(trainset) AS ts_awal
+    FROM jadwal
+    WHERE line = 'Lantai 3'
+      AND tanggal_mulai <= CURDATE()
+),
+
+latest_stok AS (
+    SELECT 
+        sm.komat,
+        sm.uom AS satuan,
+        sm.stok_warehouse,
+        sm.stok_ppc,
+        sm.post_date,
+
+        ROW_NUMBER() OVER (
+            PARTITION BY sm.komat
+            ORDER BY sm.post_date DESC, sm.no DESC
+        ) AS rn
+
+    FROM stok_material sm
+),
+
+base_kebutuhan AS (
+    SELECT
+        j.trainset,
+        j.tanggal_mulai,
+        j.line,
+        j.id_product,
+        j.product_name,
+
+        mm.komat,
+        mm.deskripsi,
+        mm.spesifikasi,
+
+        mm.jumlah_diminta,
+        j.jumlah_tiapts,
+
+        -- kebutuhan tiap product
+        (mm.jumlah_diminta * j.jumlah_tiapts) AS kebutuhan_produk
+
+    FROM jadwal j
+
+    INNER JOIN master_material mm
+        ON j.id_product = mm.id_produk
+
+    CROSS JOIN trainset_awal ta
+
+    WHERE j.line = 'Lantai 3'
+      AND j.trainset >= ta.ts_awal
+),
+
+incremental_kebutuhan AS (
+    SELECT
+        bk.*,
+
+        -- cumulative kebutuhan per komat
+        SUM(bk.kebutuhan_produk) OVER (
+            PARTITION BY bk.komat
+            ORDER BY bk.trainset, bk.id_product
+        ) AS kebutuhan_incremental
+
+    FROM base_kebutuhan bk
+)
+
+SELECT
+    ik.trainset,
+    ik.tanggal_mulai,
+    ik.line,
+
+    ik.id_product,
+    ik.product_name,
+
+    ik.komat,
+    ik.deskripsi,
+    ik.spesifikasi,
+
+    ls.satuan,
+
+    ik.jumlah_diminta,
+    ik.jumlah_tiapts,
+
+    ik.kebutuhan_produk,
+    ik.kebutuhan_incremental,
+
+    COALESCE(ls.stok_warehouse, 0) AS stok_warehouse,
+    COALESCE(ls.stok_ppc, 0) AS stok_ppc,
+
+    (
+        COALESCE(ls.stok_warehouse, 0)
+        + COALESCE(ls.stok_ppc, 0)
+    ) AS total_stok,
+
+    -- sisa stok berjalan
+    (
+        (
+            COALESCE(ls.stok_warehouse, 0)
+            + COALESCE(ls.stok_ppc, 0)
+        )
+        - ik.kebutuhan_incremental
+    ) AS sisa_stok,
+
+    -- jumlah kekurangan
+    CASE
+        WHEN (
+            (
+                COALESCE(ls.stok_warehouse, 0)
+                + COALESCE(ls.stok_ppc, 0)
+            )
+            - ik.kebutuhan_incremental
+        ) < 0
+        THEN ABS(
+            (
+                COALESCE(ls.stok_warehouse, 0)
+                + COALESCE(ls.stok_ppc, 0)
+            )
+            - ik.kebutuhan_incremental
+        )
+
+        ELSE 0
+    END AS jumlah_kekurangan,
+
+    CASE
+        WHEN (
+            (
+                COALESCE(ls.stok_warehouse, 0)
+                + COALESCE(ls.stok_ppc, 0)
+            )
+            - ik.kebutuhan_incremental
+        ) < 0
+        THEN 'Potensi Kurang'
+
+        ELSE 'Aman'
+    END AS status_material
+
+FROM incremental_kebutuhan ik
+
+LEFT JOIN latest_stok ls
+    ON ik.komat = ls.komat
+    AND ls.rn = 1
+
+ORDER BY
+    ik.komat,
+    ik.trainset,
+    ik.id_product;
+    `);
+
+    const rows = Array.isArray(result[0]) ? result[0] : result;
+    return rows as PotensiKekuranganMaterialRow[];
+  } catch (error) {
+    console.error('Gagal mengambil data potensi kekurangan material:', error);
+    return [];
+  }
+}
+
+
+export async function getProductKekuranganMaterialChart(): Promise<KekuranganMaterialChartRow[]> {
+  try {
+    const result = await db.execute(sql`
+WITH trainset_awal AS (
+    SELECT MAX(trainset) AS ts_awal
+    FROM jadwal
+    WHERE line = 'Lantai 3'
+      AND tanggal_mulai <= CURDATE()
+),
+
+latest_stok AS (
+    SELECT 
+        sm.komat,
+        sm.stok_warehouse,
+        sm.stok_ppc,
+
+        ROW_NUMBER() OVER (
+            PARTITION BY sm.komat
+            ORDER BY sm.post_date DESC, sm.no DESC
+        ) AS rn
+
+    FROM stok_material sm
+),
+
+base_kebutuhan AS (
+    SELECT
+        j.trainset,
+        j.id_product,
+        j.product_name,
+
+        mm.komat,
+
+        (mm.jumlah_diminta * j.jumlah_tiapts) AS kebutuhan_produk
+
+    FROM jadwal j
+
+    INNER JOIN master_material mm
+        ON j.id_product = mm.id_produk
+
+    CROSS JOIN trainset_awal ta
+
+    WHERE j.line = 'Lantai 3'
+      AND j.trainset >= ta.ts_awal
+),
+
+incremental_kebutuhan AS (
+    SELECT
+        bk.*,
+
+        SUM(bk.kebutuhan_produk) OVER (
+            PARTITION BY bk.komat
+            ORDER BY bk.trainset, bk.id_product
+        ) AS kebutuhan_incremental
+
+    FROM base_kebutuhan bk
+),
+
+final_data AS (
+    SELECT
+        ik.trainset,
+        ik.id_product,
+        ik.product_name,
+        ik.komat,
+
+        (
+            COALESCE(ls.stok_warehouse, 0)
+            + COALESCE(ls.stok_ppc, 0)
+        ) AS total_stok,
+
+        ik.kebutuhan_incremental,
+
+        (
+            (
+                COALESCE(ls.stok_warehouse, 0)
+                + COALESCE(ls.stok_ppc, 0)
+            )
+            - ik.kebutuhan_incremental
+        ) AS sisa_stok
+
+    FROM incremental_kebutuhan ik
+
+    LEFT JOIN latest_stok ls
+        ON ik.komat = ls.komat
+        AND ls.rn = 1
+)
+
+SELECT
+    fd.trainset,
+    fd.product_name,
+
+    COUNT(DISTINCT fd.komat) AS jumlah_material_kurang
+
+FROM final_data fd
+
+WHERE fd.sisa_stok < 0
+
+GROUP BY
+    fd.trainset,
+    fd.product_name
+
+ORDER BY
+    fd.trainset,
+    jumlah_material_kurang DESC;
+    `);
+
+    const rows = Array.isArray(result[0]) ? result[0] : result;
+    return rows as KekuranganMaterialChartRow[];
+  } catch (error) {
+    console.error('Gagal mengambil timeline stok material:', error);
     return [];
   }
 }

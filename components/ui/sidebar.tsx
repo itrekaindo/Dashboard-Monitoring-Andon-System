@@ -236,6 +236,7 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
     if (pathname === '/') return 'dashboard';
     if (pathname.startsWith('/andon-monitoring')) return 'andon-monitoring';
     if (pathname.startsWith('/material/monitoring-kpm')) return 'material-monitoring-kpm';
+    if (pathname.startsWith('/material/potensi-kekurangan')) return 'material-potensi-kekurangan';
     if (pathname.startsWith('/material/material-tracking')) return 'material-tracking';
     if (pathname.startsWith('/material')) return 'material-cetak-kpm-lantai3';
     if (pathname === '/operator' || pathname.startsWith('/operator/')) return 'operator-profile';
@@ -295,6 +296,11 @@ const ModernSidebar = ({ children }: ModernSidebarProps) => {
           id: 'material-monitoring-kpm',
           label: 'Monitoring KPM',
           path: '/material/monitoring-kpm'
+        },
+        {
+          id: 'material-potensi-kekurangan',
+          label: 'Potensi Kekurangan Material',
+          path: '/material/potensi-kekurangan'
         },
         /*
         {

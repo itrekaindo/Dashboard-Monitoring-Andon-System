@@ -1198,27 +1198,39 @@ SUM(CASE
     THEN COALESCE(p.percentage, 0) ELSE 0 
 END) AS percentage_marking,
 
-ROUND((
-    COALESCE(MAX(CASE 
-        WHEN p.sub_process = 'Cutting' 
-        THEN p.percentage 
-    END), 0)
-    +
-    COALESCE(MAX(CASE 
-        WHEN p.sub_process = 'Marking dan Crimping' 
-        THEN p.percentage 
-    END), 0)
-) / 2) AS percentage,
+CASE
+    -- Jika proses terakhir sudah 100 maka langsung 100
+    WHEN MAX(
+        CASE 
+            WHEN p.sub_process = 'Marking dan Crimping' 
+            THEN p.percentage 
+        END
+    ) = 100
+    THEN 100
 
-    MAX(COALESCE(p.qty_progress, 0)) AS qty_progress,
+    -- Selain itu hitung normal rata-rata
+    ELSE ROUND((
+        COALESCE(MAX(CASE 
+            WHEN p.sub_process = 'Cutting' 
+            THEN p.percentage 
+        END), 0)
+        +
+        COALESCE(MAX(CASE 
+            WHEN p.sub_process = 'Marking dan Crimping' 
+            THEN p.percentage 
+        END), 0)
+    ) / 2)
+END AS percentage,
 
-    MAX(j.jumlah_tiapts) AS total,
+MAX(COALESCE(p.qty_progress, 0)) AS qty_progress,
 
-    MIN(j.tanggal_mulai) AS tanggal_mulai,
-    MAX(j.tanggal_selesai) AS tanggal_selesai,
+MAX(j.jumlah_tiapts) AS total,
 
-    MIN(p.start_actual) AS start_actual,
-    MAX(p.start_actual) AS finish_actual
+MIN(j.tanggal_mulai) AS tanggal_mulai,
+MAX(j.tanggal_selesai) AS tanggal_selesai,
+
+MIN(p.start_actual) AS start_actual,
+MAX(p.start_actual) AS finish_actual
 
 FROM jadwal j
 

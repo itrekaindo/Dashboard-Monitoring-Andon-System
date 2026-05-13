@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, MapPin, Users, ChevronRight, Clock, CheckCircle, XCircle, AlertCircle, PauseCircle } from "lucide-react";
+import { Activity, MapPin, Users, ChevronRight, Clock, CheckCircle, XCircle, AlertCircle, PauseCircle, ChevronDown } from "lucide-react";
 import Elapsed from "@/components/ui/elapsed";
 import ProductionProgressTable from "@/components/production/ProductionProgressTable";
 import type { ProductionStats, WorkstationStats, ProductionProgress, CurrentWorkstationProgress, WorkstationDuration, ProductionEstimate, ProductStatusCard, ProductStatusSummary, OperatorStats, AbnormalProgress } from "@/lib/queries/production-progress";
@@ -110,6 +110,9 @@ function statusVariant(status?: string) {
   if (lower.includes("istirahat")) {
     return { bg: "bg-amber-400", border: "border-amber-300", text: "text-gray-900", blink: true };
   }
+  if (lower.includes("selesai kit")) {
+    return { bg: "bg-blue-500", border: "border-blue-300", text: "text-white", blink: false };
+  }
   if (lower.includes("masuk") || lower.includes("on progress")) {
     return { bg: "bg-emerald-500", border: "border-emerald-300", text: "text-white", blink: true };
   }
@@ -182,6 +185,7 @@ export default function TimelineContent({
   const [schedule, setSchedule] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [daysBack, setDaysBack] = useState(7);
+  const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
 
   // Fetch data function
   const fetchData = async (days: number = daysBack) => {
@@ -303,6 +307,9 @@ export default function TimelineContent({
     }
     if (lower.includes('istirahat')) {
       return { line: 'bg-amber-400', ring: 'border-amber-300' };
+    }
+    if (lower.includes('selesai kit')) {
+      return { line: 'bg-blue-500', ring: 'border-blue-400' };
     }
     if (lower.includes('on progress') || lower.includes('masuk')) {
       return { line: 'bg-emerald-500', ring: 'border-emerald-300' };
@@ -452,10 +459,22 @@ export default function TimelineContent({
 
         {/* Timeline */}
         {showWorkstationTimeline && (
-          <Card className="bg-gray-900/60 border border-gray-700/60 backdrop-blur-sm">
-            <CardContent className="p-4">
-              <div className="w-full space-y-2">
-                {linePairConfigs.map((pair) => {
+          <div className="relative">
+            <Card className="bg-gray-900/60 border border-gray-700/60 backdrop-blur-sm">
+              <button
+                onClick={() => setIsTimelineExpanded(!isTimelineExpanded)}
+                className="absolute -top-3 -right-3 flex items-center gap-2 px-3 py-2 bg-gray-900/60 border border-gray-700/60 hover:bg-gray-800/80 text-white text-sm rounded-lg transition-colors duration-200 z-20"
+              >
+                <span>Perluas Tampilan Line</span>
+                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isTimelineExpanded ? 'rotate-180' : ''}`} />
+              </button>
+
+              <CardContent className="p-4">
+                <div className="w-full space-y-2">
+                  {/* Animated container for line pairs */}
+                  <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isTimelineExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                    <div className="space-y-2">
+                      {linePairConfigs.map((pair) => {
                   const oddLatestDisplay = getWorkstationDisplay(pair.odd.workstation);
                   const evenLatestDisplay = getWorkstationDisplay(pair.even.workstation);
                   const oddDisplays = getWorkstationDisplays(pair.odd.workstation);
@@ -547,8 +566,12 @@ export default function TimelineContent({
                     </div>
                   );
                 })}
+                    </div>
+                  </div>
 
-                <div className="grid grid-cols-[64px_1fr] gap-3 items-stretch -mt-6">
+                {/* Line 7 */}
+                <div className="space-y-2">
+                  <div className="grid grid-cols-[64px_1fr] gap-3 items-stretch -mt-6">
                   <div className="grid grid-rows-[56px_24px_56px] items-center py-1 text-sm text-gray-300 leading-none">
                     <div></div>
                     <div></div>
@@ -619,9 +642,11 @@ export default function TimelineContent({
                     </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Product status cards - Kanban Board */}
@@ -750,12 +775,18 @@ export default function TimelineContent({
                   On Progress
                 </h3>
                 <div className="text-xs text-gray-200 text-center mt-1">
-                  {cards.filter(card => card.is_completed === 0).length} produk
+                  {cards.filter(card => {
+                    const status = card.status || '';
+                    return card.is_completed === 0 || status.toLowerCase().includes('masuk kit') || status.toLowerCase().includes('selesai kit');
+                  }).length} produk
                 </div>
               </div>
               <div className="space-y-3">
                 {cards
-                  .filter(card => card.is_completed === 0)
+                  .filter(card => {
+                    const status = card.status || '';
+                    return card.is_completed === 0 || status.toLowerCase().includes('masuk kit') || status.toLowerCase().includes('selesai kit');
+                  })
                   .map((card, idx) => {
                     // Check if status is "Tunggu" (waiting)
                     const isWaiting = card.status?.toLowerCase().includes('tunggu');
@@ -825,12 +856,18 @@ export default function TimelineContent({
                   QC Process
                 </h3>
                 <div className="text-xs text-gray-200 text-center mt-1">
-                  {cards.filter(card =>  card.status == 'Tunggu QC').length} produk
+                  {cards.filter(card => {
+                    const status = card.status || '';
+                    return status === 'Tunggu QC' && !status.toLowerCase().includes('masuk kit') && !status.toLowerCase().includes('selesai kit');
+                  }).length} produk
                 </div>
               </div>
               <div className="space-y-3">
                 {cards
-                  .filter(card => card.is_completed === 1 && card.status !== 'Finish Good')
+                  .filter(card => {
+                    const status = card.status || '';
+                    return card.is_completed === 1 && status !== 'Finish Good' && !status.toLowerCase().includes('masuk kit') && !status.toLowerCase().includes('selesai kit');
+                  })
                   .map((card, qcIdx) => {
                     const trackingHref = card.id_perproduct
                       ? `https://sinergi.ptrekaindo.co.id/product-tracking?q=${encodeURIComponent(card.id_perproduct)}`
